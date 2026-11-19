@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>StrangeLife</title>
-<meta name="description" content="A planet-scale evolution sandbox. Spin the globe, shape the climate, and watch life evolve.">
+<meta name="description" content="A planet-scale evolution sandbox. Shape a barren world until life begins, then watch it branch into bacteria, plants, fungi and animals.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
@@ -24,8 +24,9 @@
     <span class="brand-mark" aria-hidden="true"></span>
     <span class="brand-name">StrangeLife</span>
   </div>
-  <div class="clock" title="Simulated time since life began">
-    <span id="clock-value" class="mono">0.00</span><span class="unit">Myr</span>
+  <div class="clock" title="Age of the planet">
+    <span id="clock-value" class="mono">0 kyr</span>
+    <span id="eon-chip" class="eon-chip">Hadean</span>
   </div>
   <div class="speed" role="group" aria-label="Simulation speed">
     <button data-speed="0" title="Pause (Space)">❚❚</button>
@@ -35,10 +36,10 @@
     <button data-speed="4" title="Fastest">▶▶▶▶</button>
   </div>
   <dl class="stats">
-    <div><dt>Creatures</dt><dd id="stat-pop" class="mono">0</dd></div>
     <div><dt>Species</dt><dd id="stat-species" class="mono">0</dd></div>
-    <div><dt>Mean temp</dt><dd id="stat-temp" class="mono">0°</dd></div>
-    <div class="hide-narrow"><dt>Extinct</dt><dd id="stat-extinct" class="mono">0</dd></div>
+    <div title="Share of the planet's zones with life"><dt>Life</dt><dd id="stat-life" class="mono">0%</dd></div>
+    <div><dt>Temp</dt><dd id="stat-temp" class="mono">0°</dd></div>
+    <div><dt>Oxygen</dt><dd id="stat-o2" class="mono">0%</dd></div>
   </dl>
   <div class="top-actions">
     <button id="btn-help" class="ghost" title="How to play (H)">?</button>
@@ -61,62 +62,83 @@
 
 <aside class="panel" id="panel">
   <div class="tabs" role="tablist">
-    <button role="tab" data-tab="species" class="active">Species</button>
+    <button role="tab" data-tab="life" class="active">Life</button>
+    <button role="tab" data-tab="planet">Planet</button>
     <button role="tab" data-tab="history">History</button>
-    <button role="tab" data-tab="tree">Tree of life</button>
+    <button role="tab" data-tab="tree">Tree</button>
     <button role="tab" data-tab="world">World</button>
     <button class="collapse" id="btn-collapse" title="Hide panel" aria-label="Hide panel">›</button>
   </div>
 
-  <section class="tab-body" data-body="species">
+  <section class="tab-body" data-body="life">
+    <div class="kingdom-row" id="kingdom-row"></div>
     <p class="muted small" id="species-summary"></p>
     <ol class="species-list" id="species-list"></ol>
   </section>
 
+  <section class="tab-body" data-body="planet" hidden>
+    <div class="eon-card" id="eon-card"></div>
+    <div id="atmo-stats"></div>
+    <h3>The story of life</h3>
+    <ol class="story" id="story"></ol>
+  </section>
+
   <section class="tab-body" data-body="history" hidden>
-    <h3>Population by species</h3>
-    <canvas id="chart-pop" class="chart" height="150"></canvas>
-    <h3>Diversity &amp; climate</h3>
-    <canvas id="chart-climate" class="chart" height="110"></canvas>
-    <div class="legend small"><span class="key key-div"></span>Species <span class="key key-temp"></span>Mean temperature</div>
+    <h3>Species by kingdom</h3>
+    <canvas id="chart-div" class="chart"></canvas>
+    <div class="legend small" id="legend-div"></div>
+    <h3>Atmosphere &amp; climate</h3>
+    <canvas id="chart-atmo" class="chart"></canvas>
+    <div class="legend small"><span><i class="key-o2"></i>Oxygen</span><span><i class="key-co2"></i>CO₂ (log)</span><span><i class="key-temp"></i>Temperature</span></div>
     <h3>Chronicle</h3>
     <ol class="chronicle" id="chronicle"></ol>
   </section>
 
   <section class="tab-body" data-body="tree" hidden>
-    <p class="muted small">Each line is a species, from its origin (left) to now or its extinction. Branches show which species it descended from. Species that never passed 8 individuals are left out.</p>
+    <p class="muted small">Each line is a species, from its origin to now or its extinction, coloured by kingdom. Branches show who descended from whom. Click a living species to see its range.</p>
     <div class="tree-wrap"><canvas id="tree" class="tree"></canvas></div>
   </section>
 
   <section class="tab-body" data-body="world" hidden>
     <h3>Map view</h3>
     <div class="seg" id="overlay-seg" role="group" aria-label="Map view">
-      <button data-overlay="biome" class="active">Biomes</button>
+      <button data-overlay="biome" class="active">Surface</button>
       <button data-overlay="temperature">Heat</button>
       <button data-overlay="moisture">Rain</button>
       <button data-overlay="elevation">Height</button>
+      <button data-overlay="organics">Organics</button>
       <button data-overlay="plants">Plants</button>
+      <button data-overlay="diversity">Diversity</button>
     </div>
     <h3>Climate</h3>
     <label class="field"><span>Greenhouse <output id="out-greenhouse" class="mono">0°C</output></span>
-      <input id="greenhouse" type="range" min="-15" max="15" step="0.5" value="0">
+      <input id="greenhouse" type="range" min="-20" max="20" step="0.5" value="0">
     </label>
     <label class="field"><span>Sea level <output id="out-sea" class="mono">0 m</output></span>
-      <input id="sea-level" type="range" min="-0.35" max="0.35" step="0.01" value="0">
+      <input id="sea-level" type="range" min="-0.5" max="0.35" step="0.01" value="0">
     </label>
     <h3>Evolution</h3>
-    <label class="field"><span>Mutation rate <output id="out-mut" class="mono">1.0×</output></span>
-      <input id="mutation" type="range" min="0" max="3" step="0.1" value="1">
+    <label class="field"><span>Mutation &amp; speciation <output id="out-mut" class="mono">1.0×</output></span>
+      <input id="mutation" type="range" min="0.2" max="3" step="0.1" value="1">
     </label>
-    <label class="field"><span>Plant growth <output id="out-growth" class="mono">1.0×</output></span>
-      <input id="growth" type="range" min="0.25" max="2.5" step="0.05" value="1">
+    <label class="field"><span>Major transitions <output id="out-trans" class="mono">1.0×</output></span>
+      <input id="transitions" type="range" min="0.2" max="5" step="0.1" value="1">
     </label>
     <h3>Display</h3>
+    <label class="check"><input type="checkbox" id="show-icons" checked> Life icons</label>
     <label class="check"><input type="checkbox" id="show-clouds" checked> Clouds</label>
     <label class="check"><input type="checkbox" id="show-atmo" checked> Atmosphere</label>
-    <label class="check"><input type="checkbox" id="show-life" checked> Creatures</label>
+    <label class="check"><input type="checkbox" id="show-cards" checked> Discovery cards</label>
+    <label class="check"><input type="checkbox" id="natural-events" checked> Comets &amp; asteroids</label>
     <label class="check"><input type="checkbox" id="auto-rotate"> Spin the globe</label>
     <h3>New world</h3>
+    <label class="field"><span>Start from</span>
+      <select id="scenario">
+        <option value="barren">Young planet (no life yet)</option>
+        <option value="microbial">Microbial ocean</option>
+        <option value="oxygen">Oxygen world (complex life)</option>
+      </select>
+    </label>
     <div class="row">
       <label class="field grow"><span>Seed</span><input id="seed-input" type="number" min="1" max="999999"></label>
       <button id="btn-random-seed" class="ghost" title="Random seed">⟳</button>
@@ -127,19 +149,30 @@
 
 <section class="inspector" id="inspector" hidden></section>
 
+<section class="card" id="card" hidden aria-live="polite">
+  <div class="card-icon" id="card-icon"></div>
+  <div class="card-body">
+    <p class="eyebrow" id="card-earth"></p>
+    <h2 id="card-title"></h2>
+    <p id="card-text"></p>
+    <div class="card-foot"><span class="muted small" id="card-more"></span><button class="primary" id="card-close">Continue</button></div>
+  </div>
+</section>
+
 <ol class="toasts" id="toasts" aria-live="polite"></ol>
 
 <div class="intro" id="intro">
   <div class="intro-card">
     <p class="eyebrow">An evolution sandbox</p>
     <h1>StrangeLife</h1>
-    <p class="lede">A young planet with one form of life: a microscopic swimmer in a warm, shallow sea. Every creature that follows descends from it, each a little different from its parent.</p>
+    <p class="lede">A newborn planet: scalding seas under a thick CO₂ sky, battered by comets, with no life at all. Make it habitable, or wait for it to cool on its own, and watch life begin. Then follow it as it branches into bacteria, algae, fungi, plants and animals.</p>
     <ul class="how">
-      <li><b>Look around.</b> Drag to spin the planet. Scroll or pinch to zoom down to the coastlines.</li>
-      <li><b>Watch.</b> Speed up time and follow life as it spreads, splits into species, crawls onto land, and starts hunting.</li>
-      <li><b>Meddle.</b> Raise mountains, warm the poles, flood the lowlands, seed new organisms, or drop a meteor and see who survives.</li>
+      <li><b>Look around.</b> Drag to spin the planet. Scroll or pinch to zoom in. Icons show what lives in each region.</li>
+      <li><b>Kindle life.</b> Life needs liquid water, warm shallow seas and organic molecules. Volcanic vents, lightning and comets make them. The <i>Planet</i> tab tracks your progress.</li>
+      <li><b>Watch it evolve.</b> Oxygen from photosynthesis rusts the oceans, then fills the sky. Complex cells, multicellular life, land plants and animals each need the planet to be ready.</li>
+      <li><b>Meddle.</b> Raise continents, warm or freeze the climate, seed organisms, or drop an asteroid and see who survives.</li>
     </ul>
-    <p class="muted small">With a terraforming tool selected, left-drag paints and right-drag spins. Keys: <kbd>1</kbd>–<kbd>9</kbd> tools, <kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> speed.</p>
+    <p class="muted small">With a terraforming tool selected, left-drag paints and right-drag spins. Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd>, <kbd>-</kbd>, <kbd>=</kbd> tools, <kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> speed.</p>
     <button id="btn-start" class="primary big">Begin</button>
   </div>
 </div>

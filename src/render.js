@@ -1,15 +1,26 @@
-// Three.js view of the world: globe, ocean, atmosphere, clouds, stars and creatures.
+// Three.js view of the world: globe, ocean, atmosphere, clouds, stars, and the life icons that
+// show which kinds of life live in each zone.
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { G, hslToRgb } from './life.js';
+import { KINGDOMS, MAXT } from './ecosystem.js';
 import { makeNoise3, mulberry32 } from './rng.js';
 
 const LAND_H = 0.045;  // terrain exaggeration above sea level
 const SEA_H = 0.03;    // depth exaggeration below
+const ATLAS_GRID = 12; // icons per atlas row
+const ATLAS_CELL = 80;
 
 export function surfaceRadius(e) {
   return 1 + (e > 0 ? e * LAND_H : e * SEA_H);
+}
+
+export function speciesRGB(sp, l = 0.55) {
+  const h = sp.hue, s = 0.62;
+  const k = (n) => (n + h * 12) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [f(0), f(8), f(4)];
 }
 
 export class Renderer {
@@ -17,10 +28,10 @@ export class Renderer {
     this.canvas = canvas;
     this.world = world;
     this.overlay = 'biome';
-    this.highlightSpecies = 0;
-    this.selected = -1;
-    this.follow = false;
+    this.highlight = null;   // species whose range is highlighted
     this.showClouds = true;
+    this.showIcons = true;
+    this.effects = [];
 
     const r = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true }));
     r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -50,10 +61,10 @@ export class Renderer {
 
     this.buildStars();
     this.buildOcean();
-    this.buildGlobe();
     this.buildAtmosphere();
+    this.buildGlobe();
     this.buildClouds();
-    this.buildCreatures();
+    this.buildIcons();
     this.buildCursor();
 
     this.resize();
@@ -65,9 +76,9 @@ export class Renderer {
     this.planetGroup.remove(this.globe);
     this.globe.geometry.dispose();
     this.buildGlobe();
+    this.highlight = null;
     this.updateTerrain();
-    this.selected = -1;
-    this.follow = false;
+    this.updateIcons();
   }
 
   resize() {
@@ -75,6 +86,8 @@ export class Renderer {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.iconMat) this.iconMat.uniforms.uMaxPx.value = 34 * this.renderer.getPixelRatio();
+    if (this.iconMat) this.iconMat.uniforms.uScale.value = this.renderer.getDrawingBufferSize(new THREE.Vector2()).y / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
   }
 
   // ---------- scene pieces ----------
@@ -148,8 +161,7 @@ export class Renderer {
         const lon = (x / W) * Math.PI * 2;
         const px = Math.cos(lat) * Math.cos(lon), py = Math.sin(lat), pz = Math.cos(lat) * Math.sin(lon);
         let v = N.fbm(px * 2.2, py * 4.5, pz * 2.2, 5) * 1.4 + 0.08;
-        // bands of cloud along the equator and mid-latitudes
-        v += 0.12 * Math.cos(lat * 6);
+        v += 0.12 * Math.cos(lat * 6); // cloud bands along the equator and mid-latitudes
         const a = Math.max(0, Math.min(1, (v - 0.08) * 3));
         const k = (y * W + x) * 4;
         img.data[k] = img.data[k + 1] = img.data[k + 2] = 255;
@@ -165,27 +177,138 @@ export class Renderer {
     this.scene.add(this.clouds);
   }
 
-  buildCreatures() {
-    const max = this.world.life.max;
-    const mk = (geo) => {
-      const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.6 }), max);
-      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
-      m.instanceColor.setUsage(THREE.DynamicDrawUsage);
-      m.frustumCulled = false;
-      m.count = 0;
-      m.renderOrder = 2;
-      this.planetGroup.add(m);
-      return m;
-    };
-    this.grazers = mk(new THREE.IcosahedronGeometry(1, 0));
-    this.hunters = mk(new THREE.TetrahedronGeometry(1.35, 0));
+  // Life icons: one billboard point per icon, sampled from an atlas of emoji drawn on round,
+  // kingdom-coloured badges. Zoomed out, each zone shows its most notable life; zoomed in, up to three.
+  buildIcons() {
+    const cv = (this.atlasCanvas = document.createElement('canvas'));
+    cv.width = cv.height = ATLAS_GRID * ATLAS_CELL;
+    this.atlasCtx = cv.getContext('2d');
+    this.atlasIndex = new Map();
+    this.atlasTex = new THREE.CanvasTexture(cv);
+    this.atlasTex.colorSpace = THREE.SRGBColorSpace;
+    this.atlasTex.generateMipmaps = true;
+    this.atlasTex.minFilter = THREE.LinearMipmapLinearFilter;
 
-    const ring = new THREE.RingGeometry(1.4, 1.9, 24);
-    this.marker = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: 0xffd27a, side: THREE.DoubleSide, transparent: true, opacity: 0.9, depthTest: false }));
-    this.marker.visible = false;
-    this.marker.renderOrder = 5;
-    this.planetGroup.add(this.marker);
+    const max = this.world.eco.Z * 4;
+    const g = new THREE.BufferGeometry();
+    this.iconPos = new Float32Array(max * 3);
+    this.iconCell = new Float32Array(max * 2);
+    this.iconSize = new Float32Array(max);
+    this.iconRank = new Float32Array(max);
+    this.iconLod = new Float32Array(max);
+    g.setAttribute('position', new THREE.BufferAttribute(this.iconPos, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aCell', new THREE.BufferAttribute(this.iconCell, 2).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aSize', new THREE.BufferAttribute(this.iconSize, 1).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aRank', new THREE.BufferAttribute(this.iconRank, 1).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aLod', new THREE.BufferAttribute(this.iconLod, 1).setUsage(THREE.DynamicDrawUsage));
+    g.setDrawRange(0, 0);
+    this.iconMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uAtlas: { value: this.atlasTex }, uGrid: { value: ATLAS_GRID }, uScale: { value: 800 },
+        uZoomIn: { value: 0 }, uLod: { value: 2 }, uMaxPx: { value: 40 }, uCam: { value: new THREE.Vector3() },
+      },
+      vertexShader: `
+        attribute vec2 aCell; attribute float aSize; attribute float aRank; attribute float aLod;
+        uniform float uScale; uniform float uZoomIn; uniform float uLod; uniform float uMaxPx; uniform vec3 uCam;
+        varying vec2 vCell; varying float vAlpha;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mv;
+          vec3 n = normalize(position);
+          float facing = dot(n, normalize(uCam - position));
+          // aRank 0: always shown; 1: only zoomed out (a zone's top icon, centred); 2: only zoomed in (grouped)
+          float show = aRank < 0.5 ? 1.0 : aRank < 1.5 ? 1.0 - uZoomIn : uZoomIn;
+          // zoomed far out, only zones on a coarser nested grid show icons
+          if (aLod > uLod + 0.5) show = 0.0;
+          vAlpha = smoothstep(0.08, 0.4, facing) * show;
+          gl_PointSize = min(uMaxPx, aSize * uScale / -mv.z);
+          vCell = aCell;
+        }`,
+      fragmentShader: `
+        uniform sampler2D uAtlas; uniform float uGrid;
+        varying vec2 vCell; varying float vAlpha;
+        void main() {
+          if (vAlpha < 0.02) discard;
+          vec2 uv = vec2((vCell.x + gl_PointCoord.x) / uGrid, 1.0 - (vCell.y + gl_PointCoord.y) / uGrid);
+          vec4 c = texture2D(uAtlas, uv);
+          if (c.a * vAlpha < 0.06) discard;
+          gl_FragColor = vec4(c.rgb, c.a * vAlpha);
+        }`,
+      transparent: true, depthWrite: false,
+    });
+    this.icons = new THREE.Points(g, this.iconMat);
+    this.icons.renderOrder = 4;
+    this.icons.frustumCulled = false;
+    this.planetGroup.add(this.icons);
+  }
+
+  atlasSlot(icon, kingdom) {
+    const key = icon + '|' + kingdom;
+    let i = this.atlasIndex.get(key);
+    if (i !== undefined) return i;
+    i = this.atlasIndex.size;
+    if (i >= ATLAS_GRID * ATLAS_GRID) return 0;
+    this.atlasIndex.set(key, i);
+    const ctx = this.atlasCtx, S = ATLAS_CELL;
+    const x = (i % ATLAS_GRID) * S, y = Math.floor(i / ATLAS_GRID) * S;
+    const cx = x + S / 2, cy = y + S / 2, r = S * 0.44;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(8,12,22,0.55)'; ctx.fill();
+    ctx.lineWidth = S * 0.06; ctx.strokeStyle = KINGDOMS[kingdom]?.color || '#ccc'; ctx.stroke();
+    ctx.font = `${Math.round(S * 0.5)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(icon, cx, cy + S * 0.03);
+    ctx.restore();
+    this.atlasTex.needsUpdate = true;
+    return i;
+  }
+
+  // rebuild the icon layer from the current biosphere
+  updateIcons() {
+    const W = this.world, E = W.eco, P = W.planet;
+    const zp = E.zgrid.pos;
+    const hl = this.highlight && this.highlight.died < 0 ? this.highlight : null;
+    let n = 0;
+    const up = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3(), t1 = new THREE.Vector3(), t2 = new THREE.Vector3();
+    const OFFS = [[0, 0.5], [-0.62, -0.45], [0.62, -0.45]];
+    let lod = 0;
+    const put = (sp, x, y, z, size, rank) => {
+      const slot = this.atlasSlot(sp.icon, sp.kingdom);
+      this.iconPos[n * 3] = x; this.iconPos[n * 3 + 1] = y; this.iconPos[n * 3 + 2] = z;
+      this.iconCell[n * 2] = slot % ATLAS_GRID;
+      this.iconCell[n * 2 + 1] = Math.floor(slot / ATLAS_GRID);
+      this.iconSize[n] = size;
+      this.iconRank[n] = rank;
+      this.iconLod[n] = lod;
+      n++;
+    };
+    for (let z = 0; z < E.Z && this.showIcons; z++) {
+      const list = hl ? (E.B[z * MAXT + hl.slot] > 1e-4 ? [hl] : []) : E.zoneIcons(z);
+      if (!list.length) continue;
+      // the zone grid is nested: the first 162 / 642 zones form coarser geodesic grids
+      lod = z < 162 ? 0 : z < 642 ? 1 : 2;
+      // zone z's centre is terrain vertex z
+      const r = surfaceRadius(Math.max(P.elev[z], P.seaLevel)) + 0.012;
+      nrm.set(zp[z * 3], zp[z * 3 + 1], zp[z * 3 + 2]);
+      t1.crossVectors(nrm, Math.abs(nrm.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : up).normalize();
+      t2.crossVectors(nrm, t1);
+      const cx = nrm.x * r, cy = nrm.y * r, cz = nrm.z * r;
+      if (list.length === 1) { put(list[0], cx, cy, cz, 0.044, 0); continue; }
+      put(list[0], cx, cy, cz, 0.044, 1);
+      const d = this.groupSpacing || 0.02;
+      for (let k = 0; k < list.length; k++) {
+        const o = OFFS[k];
+        put(list[k], cx + (t1.x * o[0] + t2.x * o[1]) * d, cy + (t1.y * o[0] + t2.y * o[1]) * d, cz + (t1.z * o[0] + t2.z * o[1]) * d, k === 0 ? 0.04 : 0.034, 2);
+      }
+    }
+    this.icons.geometry.setDrawRange(0, n);
+    const g = this.icons.geometry;
+    g.attributes.position.needsUpdate = true;
+    g.attributes.aCell.needsUpdate = true;
+    g.attributes.aSize.needsUpdate = true;
+    g.attributes.aRank.needsUpdate = true;
+    g.attributes.aLod.needsUpdate = true;
   }
 
   buildCursor() {
@@ -217,73 +340,42 @@ export class Renderer {
   }
 
   updateColors() {
-    this.world.planet.colors(this.colorBuf, this.overlay);
+    const W = this.world, P = W.planet, E = W.eco;
+    const out = this.colorBuf;
+    if (this.overlay === 'diversity') {
+      // number of species per zone
+      for (let c = 0; c < P.n; c++) {
+        const z = E.zoneOf[c];
+        const v = Math.min(1, E.presN[z] / 30);
+        const w = P.water[c] ? 0.55 : 1;
+        out[c * 3] = (0.08 + 0.9 * v * v) * w; out[c * 3 + 1] = (0.07 + 0.7 * v) * w; out[c * 3 + 2] = (0.14 + 0.3 * (1 - v)) * w;
+      }
+    } else {
+      P.colors(out, this.overlay);
+    }
+    const hl = this.highlight && this.highlight.died < 0 ? this.highlight : null;
+    if (hl) {
+      const [hr, hg, hb] = speciesRGB(hl, 0.6);
+      for (let c = 0; c < P.n; c++) {
+        const inRange = E.B[E.zoneOf[c] * MAXT + hl.slot] > 1e-4;
+        if (inRange) { out[c * 3] = out[c * 3] * 0.45 + hr * 0.55; out[c * 3 + 1] = out[c * 3 + 1] * 0.45 + hg * 0.55; out[c * 3 + 2] = out[c * 3 + 2] * 0.45 + hb * 0.55; }
+        else { out[c * 3] *= 0.4; out[c * 3 + 1] *= 0.4; out[c * 3 + 2] *= 0.4; }
+      }
+    }
     this.globe.geometry.attributes.color.needsUpdate = true;
-    this.ocean.visible = this.overlay === 'biome' || this.overlay === 'life';
+    this.ocean.visible = this.overlay === 'biome';
+    // the sky and sea change with the atmosphere: hazy orange and green under CO₂ and methane,
+    // blue once oxygen builds up
+    const ox = Math.min(1, P.o2 / 8);
+    this.atmosphere.material.uniforms.glow.value.setRGB(0.95 - 0.66 * ox, 0.55 + 0.0 * ox, 0.3 + 0.7 * ox);
+    this.ocean.material.color.setRGB(0.22 - 0.11 * ox, 0.36 - 0.05 * ox, 0.25 + 0.29 * ox);
   }
 
-  // world-space position of a cell on the surface (on the water surface for sea cells)
   cellSurface(c, out) {
     const P = this.world.planet;
     const r = surfaceRadius(Math.max(P.elev[c], P.seaLevel));
     const p = P.grid.pos;
     return out.set(p[c * 3] * r, p[c * 3 + 1] * r, p[c * 3 + 2] * r);
-  }
-
-  updateCreatures(alpha) {
-    const L = this.world.life, P = this.world.planet;
-    const pos = P.grid.pos;
-    const gm = this.grazers.instanceMatrix.array, hm = this.hunters.instanceMatrix.array;
-    const gc = this.grazers.instanceColor.array, hc = this.hunters.instanceColor.array;
-    const dist = this.camera.position.length();
-    const vis = Math.min(2.6, Math.max(1, (dist - 1) * 0.9)); // keep creatures visible when zoomed out
-    const hl = this.highlightSpecies;
-    let ng = 0, nh = 0;
-    const tmp = new THREE.Vector3();
-    for (let i = 0; i < L.hi; i++) {
-      if (!L.alive[i]) continue;
-      const a = L.prevCell[i], b = L.cell[i];
-      const ra = surfaceRadius(Math.max(P.elev[a], P.seaLevel));
-      const rb = surfaceRadius(Math.max(P.elev[b], P.seaLevel));
-      let x = pos[a * 3] * ra + (pos[b * 3] * rb - pos[a * 3] * ra) * alpha;
-      let y = pos[a * 3 + 1] * ra + (pos[b * 3 + 1] * rb - pos[a * 3 + 1] * ra) * alpha;
-      let z = pos[a * 3 + 2] * ra + (pos[b * 3 + 2] * rb - pos[a * 3 + 2] * ra) * alpha;
-      // small per-creature offset so crowds don't stack exactly
-      const jx = L.jitter[i * 2] * 0.006, jy = L.jitter[i * 2 + 1] * 0.006;
-      x += jx; y += jy; z += -jx * 0.5 + jy * 0.5;
-      const size = 0.3 + 2.7 * L.genes[i * G];
-      const s = (0.0022 + 0.0016 * Math.sqrt(size)) * vis;
-      tmp.set(x, y, z).normalize();
-      x += tmp.x * s; y += tmp.y * s; z += tmp.z * s;
-
-      let [r, g, bl] = hslToRgb(L.genes[i * G + 6], 0.75, 0.55);
-      if (hl && L.species[i] !== hl) { r *= 0.18; g *= 0.18; bl *= 0.18; }
-      const hunter = L.genes[i * G + 2] > 0.5;
-      const m = hunter ? hm : gm, col = hunter ? hc : gc;
-      const k = hunter ? nh++ : ng++;
-      const o = k * 16;
-      m[o] = s; m[o + 1] = 0; m[o + 2] = 0; m[o + 3] = 0;
-      m[o + 4] = 0; m[o + 5] = s; m[o + 6] = 0; m[o + 7] = 0;
-      m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = s; m[o + 11] = 0;
-      m[o + 12] = x; m[o + 13] = y; m[o + 14] = z; m[o + 15] = 1;
-      col[k * 3] = r; col[k * 3 + 1] = g; col[k * 3 + 2] = bl;
-
-      if (i === this.selected) {
-        this.marker.position.set(x, y, z);
-        this.marker.scale.setScalar(s * 1.1);
-        this.marker.lookAt(x * 2, y * 2, z * 2);
-        this.selectedPos = this.marker.position;
-      }
-    }
-    this.grazers.count = ng;
-    this.hunters.count = nh;
-    this.grazers.instanceMatrix.needsUpdate = true;
-    this.hunters.instanceMatrix.needsUpdate = true;
-    this.grazers.instanceColor.needsUpdate = true;
-    this.hunters.instanceColor.needsUpdate = true;
-
-    if (this.selected >= 0 && !L.alive[this.selected]) { this.selected = -1; this.follow = false; }
-    this.marker.visible = this.selected >= 0;
   }
 
   showCursor(cell, radius) {
@@ -336,88 +428,93 @@ export class Renderer {
 
   // ---------- effects ----------
 
-  launchMeteor(cell, onImpact) {
+  // something falling from space: a rocky meteor (orange) or an icy comet (blue-white)
+  launchMeteor(cell, onImpact, kind = 'meteor') {
     const target = this.cellSurface(cell, new THREE.Vector3());
     const n = target.clone().normalize();
     const side = new THREE.Vector3(0, 1, 0).cross(n).normalize();
     if (side.lengthSq() < 0.1) side.set(1, 0, 0);
     const from = n.clone().multiplyScalar(2.6).addScaledVector(side, 1.2);
-    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.018, 0), new THREE.MeshBasicMaterial({ color: 0xffc070 }));
+    const comet = kind === 'comet';
+    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(comet ? 0.012 : 0.018, 0), new THREE.MeshBasicMaterial({ color: comet ? 0xd8f0ff : 0xffc070 }));
     const trailGeo = new THREE.BufferGeometry().setFromPoints([from.clone(), from.clone()]);
-    const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.8 }));
+    const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: comet ? 0x9fd8ff : 0xffa040, transparent: true, opacity: 0.8 }));
     this.planetGroup.add(rock, trail);
-    this.effects = this.effects || [];
-    this.effects.push({ t: 0, dur: 0.9, update: (e) => {
+    this.effects.push({ t: 0, dur: comet ? 0.7 : 0.9, update: (e) => {
       const k = Math.min(1, e.t / e.dur);
       const p = from.clone().lerp(target, k * k);
       rock.position.copy(p);
       const a = trailGeo.attributes.position;
-      const tail = from.clone().lerp(target, Math.max(0, k * k - 0.25));
+      const tail = from.clone().lerp(target, Math.max(0, k * k - (comet ? 0.4 : 0.25)));
       a.setXYZ(0, tail.x, tail.y, tail.z); a.setXYZ(1, p.x, p.y, p.z); a.needsUpdate = true;
       if (k >= 1) {
         this.planetGroup.remove(rock, trail);
         rock.geometry.dispose(); trailGeo.dispose();
-        this.flash(target);
-        onImpact();
+        this.flash(target, comet ? 0xbfe6ff : 0xffd9a0, comet ? 0.12 : 0.3);
+        onImpact?.();
         return false;
       }
       return true;
     } });
   }
 
-  flash(at) {
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending });
+  flash(at, color = 0xffd9a0, size = 0.3) {
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending });
     const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), mat);
     ball.position.copy(at);
     this.planetGroup.add(ball);
-    this.shake = 0.5;
-    this.effects.push({ t: 0, dur: 1.6, update: (e) => {
+    if (size > 0.2) this.shake = 0.5;
+    const base = new THREE.Color(color);
+    this.effects.push({ t: 0, dur: 1.4, update: (e) => {
       const k = e.t / e.dur;
-      ball.scale.setScalar(0.02 + 0.3 * Math.sqrt(k));
+      ball.scale.setScalar(0.02 + size * Math.sqrt(k));
       mat.opacity = Math.max(0, 1 - k);
-      mat.color.setRGB(1, 0.85 - 0.5 * k, 0.6 - 0.5 * k);
+      mat.color.copy(base).multiplyScalar(1 - 0.5 * k);
       if (k >= 1) { this.planetGroup.remove(ball); ball.geometry.dispose(); mat.dispose(); return false; }
       return true;
     } });
   }
 
-  // nearest living creature to a cell (within a few cells)
-  nearestCreature(cell) {
-    const L = this.world.life, pos = this.world.planet.grid.pos;
-    let best = -1, bd = Math.cos(0.03);
-    for (let i = 0; i < L.hi; i++) {
-      if (!L.alive[i]) continue;
-      const c = L.cell[i];
-      const d = pos[c * 3] * pos[cell * 3] + pos[c * 3 + 1] * pos[cell * 3 + 1] + pos[c * 3 + 2] * pos[cell * 3 + 2];
-      if (d > bd) { bd = d; best = i; }
+  // a forked bolt from the sky to the surface
+  lightning(cell) {
+    const target = this.cellSurface(cell, new THREE.Vector3());
+    const n = target.clone().normalize();
+    const pts = [];
+    const side = new THREE.Vector3(0, 1, 0).cross(n).normalize();
+    const side2 = n.clone().cross(side);
+    for (let i = 0; i <= 8; i++) {
+      const k = i / 8;
+      const p = target.clone().addScaledVector(n, 0.09 * (1 - k));
+      if (i > 0 && i < 8) p.addScaledVector(side, (Math.random() - 0.5) * 0.02).addScaledVector(side2, (Math.random() - 0.5) * 0.02);
+      pts.push(p);
     }
-    return best;
+    const g = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: 0xe8f0ff, transparent: true, opacity: 1 });
+    const bolt = new THREE.Line(g, mat);
+    this.planetGroup.add(bolt);
+    this.effects.push({ t: 0, dur: 0.35, update: (e) => {
+      mat.opacity = Math.random() > 0.3 ? 1 - e.t / e.dur : 0.2;
+      if (e.t >= e.dur) { this.planetGroup.remove(bolt); g.dispose(); mat.dispose(); return false; }
+      return true;
+    } });
   }
 
   // ---------- frame ----------
 
-  render(dt, alpha) {
+  render(dt) {
     const cam = this.camera;
     const dist = cam.position.length();
     this.controls.rotateSpeed = Math.min(1, Math.max(0.08, (dist - 1) * 0.55));
-    if (this.follow && this.selectedPos) {
-      // swing the camera to keep the selected creature centred
-      const want = this.selectedPos.clone().normalize().multiplyScalar(dist);
-      cam.position.lerp(want, Math.min(1, dt * 2.5));
-      cam.position.setLength(dist);
-    }
     this.controls.update();
 
     // light comes from over the viewer's shoulder so the side you're looking at is lit
     const off = new THREE.Vector3(-2.2, 1.6, 1.5).applyMatrix4(cam.matrixWorld);
     this.sun.position.copy(off);
 
-    if (this.effects) {
-      // effects may add new effects while updating, so collect survivors into a fresh list
-      const list = this.effects;
-      this.effects = [];
-      for (const e of list) { e.t += dt; if (e.update(e)) this.effects.push(e); }
-    }
+    // effects may add new effects while updating, so collect survivors into a fresh list
+    const list = this.effects;
+    this.effects = [];
+    for (const e of list) { e.t += dt; if (e.update(e)) this.effects.push(e); }
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt);
       const s = this.shake * 0.02;
@@ -425,9 +522,16 @@ export class Renderer {
     }
     this.clouds.rotation.y += dt * 0.012;
     // clouds thin out as you zoom in, so the surface stays readable
-    this.clouds.visible = this.showClouds && (this.overlay === 'biome' || this.overlay === 'life');
+    this.clouds.visible = this.showClouds && this.overlay === 'biome';
     this.clouds.material.opacity = Math.max(0, Math.min(0.75, (dist - 1.25) * 0.9));
-    this.updateCreatures(alpha);
+
+    // zoomed in: up to three icons per zone; zoomed out: one
+    this.iconMat.uniforms.uZoomIn.value = dist < 1.75 ? 1 : 0;
+    // spread a zone's icon group so capped-size icons just touch at the current zoom
+    const want = Math.min(0.02, Math.max(0.006, 0.018 * (dist - 1) / 0.6));
+    if (Math.abs(want - (this.groupSpacing || 0.02)) > 0.0015) { this.groupSpacing = want; this.updateIcons(); }
+    this.iconMat.uniforms.uLod.value = dist > 3.0 ? 1 : 2;
+    this.iconMat.uniforms.uCam.value.copy(cam.position);
     this.renderer.render(this.scene, cam);
   }
 }

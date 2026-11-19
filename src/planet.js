@@ -79,40 +79,70 @@ export const BIOMES = [
   { name: 'Savanna', color: [0.72, 0.66, 0.33], K: 0.45 },
   { name: 'Rainforest', color: [0.07, 0.4, 0.11], K: 1.0 },
   { name: 'Mountains', color: [0.5, 0.45, 0.41], K: 0.1 },
+  { name: 'Scalding sea', color: [0.42, 0.36, 0.24], K: 0.03, water: true },
 ];
 export const B = {
   DEEP: 0, SHALLOW: 1, SEA_ICE: 2, ICE: 3, TUNDRA: 4, TAIGA: 5, TEMPERATE: 6,
-  GRASS: 7, DESERT: 8, SAVANNA: 9, RAINFOREST: 10, MOUNTAIN: 11,
+  GRASS: 7, DESERT: 8, SAVANNA: 9, RAINFOREST: 10, MOUNTAIN: 11, SCALDING: 12,
 };
 
 const SOIL = [0.5, 0.4, 0.29];
+const BASALT = [0.27, 0.24, 0.23];
+
+// How the planet starts. Values are loosely modelled on Earth's history:
+// the young Sun was ~25% dimmer, and the early atmosphere was thick with CO₂ and had no free oxygen.
+export const SCENARIOS = {
+  barren: { label: 'Young planet (no life)', age: 0, years: 0, seaLevel: -0.36, co2: 60000, o2: 0, iron: 1, sun: 0.76, photosynthesis: false, landPlants: false },
+  microbial: { label: 'Microbial ocean', age: 900, years: 0.6e9, seaLevel: -0.04, co2: 20, o2: 0, iron: 1, sun: 0.8, photosynthesis: false, landPlants: false },
+  oxygen: { label: 'Oxygen world', age: 14000, years: 4.0e9, seaLevel: 0, co2: 1.2, o2: 21, iron: 0, sun: 0.97, photosynthesis: true, landPlants: true },
+};
 
 // ---------- planet ----------
 
 export class Planet {
-  constructor(seed = 1, level = 6) {
+  constructor(seed = 1, level = 6, scenario = 'barren') {
     this.grid = makeGeodesicGrid(level);
     const n = (this.n = this.grid.n);
     this.elev = new Float32Array(n);        // -1 (abyss) .. +1 (peaks); sea level at this.seaLevel
     this.tempOffset = new Float32Array(n);  // local climate edits (°C)
     this.moistOffset = new Float32Array(n); // local climate edits
     this.moistNoise = new Float32Array(n);
+    this.baseT = new Float32Array(n);       // temperature from latitude/altitude only
+    this.baseM = new Float32Array(n);       // moisture from geography only
+    this.light = new Float32Array(n);       // sunlight reaching the surface, 0..1
     this.temp = new Float32Array(n);
     this.moist = new Float32Array(n);
     this.biome = new Uint8Array(n);
     this.K = new Float32Array(n);
-    this.plant = new Float32Array(n);
+    this.plant = new Float32Array(n);       // photosynthetic biomass: plankton, algae, land plants
+    this.organics = new Float32Array(n);    // prebiotic organic molecules ("primordial soup")
+    this.volc = new Float32Array(n);        // volcanic / hydrothermal activity 0..1
     this.water = new Uint8Array(n);
-    this.oceanDist = new Uint16Array(n);
+    this.oceanDist = new Uint16Array(n);    // land cells: steps to the sea
+    this.landDist = new Uint16Array(n);     // sea cells: steps to the shore
     this.seaLevel = 0;
     this.globalTemp = 0;  // player greenhouse offset (°C)
     this.winter = 0;      // impact-winter cooling, decays over time
     this.plantGrowth = 0.035;
     this.climateDirty = true;
-    this.generate(seed);
+    this.age = 0;
+    // atmosphere & geochemistry
+    this.co2 = 1;          // CO₂ relative to a modern-Earth-like level
+    this.o2 = 0;           // free oxygen, % of atmosphere
+    this.iron = 1;         // dissolved iron left in the oceans to soak up oxygen (1 = full)
+    this.sun = 1;          // solar luminosity relative to today
+    this.photosynthesis = false; // has life invented oxygenic photosynthesis?
+    this.landPlants = false;     // have plants colonised the land?
+    this.volcanism = 1;
+    this.meanT = 15; this.iceFrac = 0; this.landFrac = 0.3; this.oceanFrac = 0.7; this.landPlantCover = 0;
+    this.primaryProduction = 0;
+    this.landProduction = 0;
+    this.generate(seed, scenario);
   }
 
-  generate(seed) {
+  get ozone() { return Math.min(1, this.o2 / 4); }
+
+  generate(seed, scenario = 'barren') {
     this.seed = seed;
     const rng = mulberry32(seed);
     const N = makeNoise3(rng);
@@ -131,6 +161,12 @@ export class Planet {
       const ridge = N.ridged(px * 2.0 + 5, py * 2.0, pz * 2.0, 4);
       raw[i] = continent * 1.0 + detail * 0.35 + ridge * 0.45 * Math.max(0, continent + 0.15);
       this.moistNoise[i] = N.fbm(x * 2.3 + 50, y * 2.3, z * 2.3, 4);
+      // volcanic belts: thin ridges of activity (like mid-ocean ridges and arcs) plus hotspots
+      const v = N.ridged(x * 1.7 + 70, y * 1.7, z * 1.7, 2);
+      const hot = N.noise(x * 4 + 9, y * 4, z * 4);
+      this.volc[i] = Math.min(1, Math.max(0, (v - 0.42) * 3.2) + Math.max(0, hot - 0.45) * 3);
+      const coslat = Math.sqrt(1 - y * y);
+      this.light[i] = 0.25 + 0.75 * coslat;
     }
     // put ~31% of the surface above sea level
     const sorted = Float32Array.from(raw).sort();
@@ -142,37 +178,49 @@ export class Planet {
     }
     this.tempOffset.fill(0);
     this.moistOffset.fill(0);
-    this.seaLevel = 0;
+    this.organics.fill(0);
+    const S = SCENARIOS[scenario] || SCENARIOS.barren;
+    this.scenario = scenario;
+    this.seaLevel = S.seaLevel;
+    this.co2 = S.co2; this.o2 = S.o2; this.iron = S.iron; this.sun = S.sun;
+    this.photosynthesis = S.photosynthesis; this.landPlants = S.landPlants;
     this.globalTemp = 0;
     this.winter = 0;
+    this.age = S.age || 0;
+    this.startYears = S.years || 0;
+    this.volcanism = 1 + 3 * Math.exp(-this.age / 2000);
     this.terrainChanged();
-    for (let i = 0; i < n; i++) this.plant[i] = this.K[i] * 0.8;
+    this.plant.fill(0);
   }
 
   // call after elevation or sea-level edits
   terrainChanged() {
     const { n } = this;
     for (let i = 0; i < n; i++) this.water[i] = this.elev[i] < this.seaLevel ? 1 : 0;
-    this.computeOceanDist();
+    this.computeDistances();
+    this.computeBase();
     this.updateClimate();
   }
 
-  computeOceanDist() {
+  computeDistances() {
     const { n } = this;
     const { nbrStart, nbr } = this.grid;
-    const d = this.oceanDist;
-    const queue = new Int32Array(n);
-    let qh = 0, qt = 0;
-    for (let i = 0; i < n; i++) {
-      if (this.water[i]) { d[i] = 0; queue[qt++] = i; } else d[i] = 65535;
-    }
-    while (qh < qt) {
-      const c = queue[qh++];
-      for (let k = nbrStart[c]; k < nbrStart[c + 1]; k++) {
-        const m = nbr[k];
-        if (d[m] > d[c] + 1) { d[m] = d[c] + 1; queue[qt++] = m; }
+    const bfs = (d, isSource) => {
+      const queue = new Int32Array(n);
+      let qh = 0, qt = 0;
+      for (let i = 0; i < n; i++) {
+        if (isSource(i)) { d[i] = 0; queue[qt++] = i; } else d[i] = 65535;
       }
-    }
+      while (qh < qt) {
+        const c = queue[qh++];
+        for (let k = nbrStart[c]; k < nbrStart[c + 1]; k++) {
+          const m = nbr[k];
+          if (d[m] > d[c] + 1) { d[m] = d[c] + 1; queue[qt++] = m; }
+        }
+      }
+    };
+    bfs(this.oceanDist, (i) => this.water[i] === 1);
+    bfs(this.landDist, (i) => this.water[i] === 0);
   }
 
   // land height above sea level in 0..1 (0 for water)
@@ -180,25 +228,20 @@ export class Planet {
     return Math.max(0, (this.elev[i] - this.seaLevel) / Math.max(0.2, 1 - this.seaLevel));
   }
 
-  updateClimate() {
-    const { n } = this;
+  // geography-only parts of climate; recomputed when terrain or sea level change
+  computeBase() {
     const pos = this.grid.pos;
-    const g = this.globalTemp - this.winter;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < this.n; i++) {
       const y = pos[i * 3 + 1];
-      const lat = Math.asin(y) * 180 / Math.PI; // degrees
-      const alat = Math.abs(lat);
+      const alat = Math.abs(Math.asin(y) * 180 / Math.PI);
       let T = 28 - 50 * y * y;
       const w = this.water[i];
-      if (w) {
-        T = T * 0.8 + 3; // oceans moderate temperature
-      } else {
+      if (w) T = T * 0.8 + 3; // oceans moderate temperature
+      else {
         T -= this.heightAboveSea(i) * 34; // lapse rate
         T += Math.min(this.oceanDist[i], 12) * 0.12 * (T > 10 ? 1 : -1); // continentality
       }
-      T += g + this.tempOffset[i];
-      this.temp[i] = T;
-
+      this.baseT[i] = T;
       // moisture: noise + ocean proximity + Hadley circulation
       let m = 0.42 + this.moistNoise[i] * 0.55;
       if (!w) m += 0.42 * Math.exp(-this.oceanDist[i] / 5) - 0.15;
@@ -206,23 +249,55 @@ export class Planet {
       m += 0.3 * Math.exp(-((alat / 11) ** 2));        // tropical rain belt
       m += 0.12 * Math.exp(-(((alat - 55) / 12) ** 2)); // mid-latitude storms
       m -= Math.max(0, this.heightAboveSea(i) - 0.45) * 0.4;
+      this.baseM[i] = m;
+    }
+  }
+
+  // Global temperature shift from the atmosphere and the Sun.
+  // ~5 °C per doubling of CO₂ (a game-sized climate sensitivity), a dimmer young Sun,
+  // and ice reflecting sunlight back to space (ice-albedo feedback: can tip into a "snowball").
+  get greenhouse() { return 5 * Math.log2(Math.max(0.05, this.co2)); }
+  get solar() { return (this.sun - 1) * 75; }
+  get albedo() { return -16 * Math.max(0, this.iceFrac - 0.12); }
+  get globalShift() { return this.greenhouse + this.solar + this.albedo + this.globalTemp - this.winter; }
+
+  updateClimate() {
+    const { n } = this;
+    const g = this.globalShift;
+    let sumT = 0, ice = 0, land = 0, ocean = 0, plantLand = 0, Kland = 0;
+    for (let i = 0; i < n; i++) {
+      const T = this.baseT[i] + g + this.tempOffset[i];
+      this.temp[i] = T;
+      sumT += T;
+      let m = this.baseM[i];
       if (T < 0) m *= 0.75; // cold air holds less water
       m += this.moistOffset[i];
-      this.moist[i] = Math.min(1, Math.max(0, m));
-
-      this.biome[i] = this.classify(i, T, this.moist[i]);
-      this.K[i] = BIOMES[this.biome[i]].K;
-      if (w && this.biome[i] !== B.SEA_ICE) {
-        // warm, shallow water is productive; cold upwelling helps too
-        this.K[i] *= 0.75 + 0.25 * Math.exp(-(((T - 18) / 14) ** 2)) + (T < 8 ? 0.15 : 0);
+      m = m < 0 ? 0 : m > 1 ? 1 : m;
+      this.moist[i] = m;
+      const b = this.classify(i, T, m);
+      this.biome[i] = b;
+      let K = BIOMES[b].K;
+      if (this.water[i]) {
+        ocean++;
+        if (b !== B.SEA_ICE && b !== B.SCALDING) K *= 0.75 + 0.25 * Math.exp(-(((T - 18) / 14) ** 2)) + (T < 8 ? 0.15 : 0);
+        if (b === B.SEA_ICE) ice++;
+      } else {
+        if (b === B.ICE) ice++; else { land++; Kland += K; plantLand += this.plant[i]; }
       }
+      this.K[i] = K;
     }
+    this.meanT = sumT / n;
+    this.iceFrac = ice / n;
+    this.landFrac = land / n;
+    this.oceanFrac = ocean / n;
+    this.landPlantCover = Kland > 0 ? plantLand / Kland : 0;
     this.climateDirty = false;
   }
 
   classify(i, T, m) {
     if (this.water[i]) {
       if (T < -6) return B.SEA_ICE;
+      if (T > 75) return B.SCALDING;
       return this.elev[i] - this.seaLevel > -0.18 ? B.SHALLOW : B.DEEP;
     }
     const h = this.heightAboveSea(i);
@@ -234,25 +309,69 @@ export class Planet {
     return m < 0.2 ? B.DESERT : m < 0.46 ? B.SAVANNA : B.RAINFOREST;
   }
 
-  growPlants() {
-    const { n, plant, K } = this;
-    const r = this.plantGrowth * (this.winter > 0 ? Math.max(0.25, 1 - this.winter / 12) : 1);
+  // Prebiotic chemistry: organic molecules form at hydrothermal vents and from lightning
+  // in a reducing atmosphere (Miller–Urey), concentrate in tidal pools, and break down in
+  // hot water, on dry land, and in oxygen.
+  stepChemistry(dt = 1) {
+    const { n, organics, temp, water, volc, landDist, biome } = this;
+    const lightning = this.o2 < 1 ? 0.0025 : 0.0002;
+    const oxidise = this.o2 > 2 ? 0.006 : 0;
     for (let i = 0; i < n; i++) {
-      const k = K[i];
-      let b = plant[i];
-      if (b > k) b -= (b - k) * 0.1; // die back after climate shifts
-      else b += r * b * (1 - b / k) + 0.0015 * k;
-      plant[i] = b;
+      let o = organics[i];
+      if (!water[i]) { if (o > 0) organics[i] = o * (dt > 1 ? 0.81 : 0.9); continue; }
+      const T = temp[i];
+      let prod = lightning + 0.01 * volc[i];
+      if (landDist[i] <= 2) prod *= 2.5; // wet–dry cycles in tidal pools concentrate monomers
+      if (T < -2) prod *= 0.2;           // frozen: chemistry crawls
+      const decay = 0.003 + (T > 50 ? (T - 50) * 0.002 : 0) + (biome[i] === B.DEEP ? 0.002 : 0) + oxidise;
+      o += (prod - o * decay) * dt;
+      if (o < 0) o = 0;
+      organics[i] = o;
     }
   }
 
-  step(tick) {
-    if (this.winter > 0) {
-      this.winter = Math.max(0, this.winter * 0.985 - 0.005);
-      if (tick % 4 === 0) this.climateDirty = true;
+  // Carbon-silicate cycle and oxygen. Volcanoes add CO₂; rock weathering removes it faster when
+  // it's warm, wet and plant-covered, which keeps the climate in check over long times.
+  // Photosynthesis makes oxygen, which first rusts the dissolved iron in the oceans (banded iron
+  // formations) and only then builds up in the air.
+  stepAtmosphere(tick) {
+    this.age++;
+    this.volcanism = 1 + 3 * Math.exp(-this.age / 2000);
+    this.sun = Math.min(1.05, this.sun + 0.000012);
+    const V = 0.012 * this.volcanism;
+    const land = this.landFrac + 0.08;
+    const W = 0.012 * this.co2 * Math.exp(Math.min(6, (this.meanT - 15) / 12)) * land * (1 + 2 * this.landPlantCover)
+      + this.primaryProduction * 0.01 * Math.min(1, this.co2); // burial of organic carbon
+    const rel = Math.max(-0.012, Math.min(0.012, (V - W) / Math.max(0.05, this.co2)));
+    this.co2 = Math.max(0.05, this.co2 * Math.exp(rel));
+
+    const P = this.primaryProduction; // mean photosynthetic biomass per zone
+    if (this.iron > 0) {
+      this.iron = Math.max(0, this.iron - P * 0.004);
+      this.o2 = Math.max(0, this.o2 - 0.02);
+    } else {
+      // volcanic gases keep soaking up oxygen while the planet is young (the "boring billion"),
+      // and above ~21% wildfires burn so readily that they hold oxygen down
+      let target = P * 110 - 14 * Math.max(0, this.volcanism - 0.95);
+      if (target > 21) target = 21 + (target - 21) * 0.25;
+      this.o2 += (Math.max(0, target) - this.o2) * 0.003;
     }
-    if (this.climateDirty) this.updateClimate();
-    this.growPlants();
+    this.o2 = Math.max(0, this.o2);
+
+    // water vapour from volcanoes slowly fills the ocean basins
+    if (this.seaLevel < 0) this.seaLevel = Math.min(0, this.seaLevel + 0.00003 * this.volcanism);
+    if (Math.abs(this.seaLevel - (this.lastSea ?? this.seaLevel)) > 0.004) {
+      this.lastSea = this.seaLevel;
+      this.terrainChanged();
+    }
+    this.lastSea ??= this.seaLevel;
+  }
+
+  step(tick) {
+    if (this.winter > 0) this.winter = Math.max(0, this.winter * 0.985 - 0.005);
+    this.stepAtmosphere(tick);
+    if (this.climateDirty || tick % 6 === 0) this.updateClimate();
+    if (tick % 2 === 0) this.stepChemistry(2);
   }
 
   // ---------- player tools ----------
@@ -296,6 +415,36 @@ export class Planet {
     this.climateDirty = true;
   }
 
+  // volcano: builds land, makes the area volcanically active (vents underwater) and vents CO₂
+  volcano(c, radius, dt) {
+    this.editElevation(c, radius * 0.6, 0.35 * dt);
+    const cells = this.cellsNear(c, radius);
+    for (let k = 0; k < cells.length; k += 2) {
+      const i = cells[k];
+      this.volc[i] = Math.min(1, this.volc[i] + 1.2 * dt * cells[k + 1]);
+    }
+    this.co2 *= 1 + 0.25 * dt;
+  }
+
+  // lightning storm: sparks organic synthesis in nearby water (Miller–Urey)
+  lightning(c, radius) {
+    const cells = this.cellsNear(c, radius);
+    for (let k = 0; k < cells.length; k += 2) {
+      const i = cells[k];
+      if (this.water[i]) this.organics[i] += 0.5 * cells[k + 1];
+    }
+  }
+
+  // icy comet: delivers water and organic molecules
+  comet(c) {
+    const cells = this.cellsNear(c, 0.22);
+    for (let k = 0; k < cells.length; k += 2) this.organics[cells[k]] += 1.6 * cells[k + 1];
+    const crater = this.cellsNear(c, 0.04);
+    for (let k = 0; k < crater.length; k += 2) this.elev[crater[k]] -= 0.12 * crater[k + 1];
+    this.seaLevel = Math.min(0.05, this.seaLevel + 0.008);
+    this.terrainChanged();
+  }
+
   impact(c) {
     const crater = this.cellsNear(c, 0.07);
     for (let k = 0; k < crater.length; k += 2) {
@@ -316,6 +465,7 @@ export class Planet {
   // writes RGB into out (Float32Array n*3)
   colors(out, mode = 'biome') {
     const { n } = this;
+    const oxic = Math.min(1, this.o2 / 6); // anoxic, iron-rich seas look green; oxygenated seas blue
     for (let i = 0; i < n; i++) {
       let r, g, b;
       if (mode === 'biome' || mode === 'life') {
@@ -323,24 +473,30 @@ export class Planet {
         const base = BIOMES[bi].color;
         if (this.water[i]) {
           const depth = Math.min(1, (this.seaLevel - this.elev[i]) / 0.6);
-          if (bi === B.SEA_ICE) { [r, g, b] = base; }
+          if (bi === B.SEA_ICE || bi === B.SCALDING) { [r, g, b] = base; }
           else {
-            r = 0.1 + (0.02 - 0.1) * depth;
-            g = 0.42 + (0.1 - 0.42) * depth;
-            b = 0.58 + (0.3 - 0.58) * depth;
-            const p = Math.min(1, this.plant[i] / 0.9) * 0.12; // plankton tint
+            const sr = 0.1 + (0.2 - 0.1) * (1 - oxic), sg = 0.42 + (0.4 - 0.42) * (1 - oxic), sb = 0.58 + (0.3 - 0.58) * (1 - oxic);
+            const dr = 0.02 + 0.03 * (1 - oxic), dg = 0.1 + 0.03 * (1 - oxic), db = 0.3 - 0.18 * (1 - oxic);
+            r = sr + (dr - sr) * depth;
+            g = sg + (dg - sg) * depth;
+            b = sb + (db - sb) * depth;
+            const p = Math.min(1, this.plant[i] / 0.9) * 0.14; // plankton tint
             g += p; r += p * 0.3;
           }
+          const o = Math.min(1, this.organics[i] / 4) * 0.55; // brown organic "soup"
+          r += (0.62 - r) * o; g += (0.45 - g) * o; b += (0.18 - b) * o;
         } else {
-          const lush = this.K[i] > 0.05 ? Math.min(1, this.plant[i] / this.K[i]) : 1;
-          r = SOIL[0] + (base[0] - SOIL[0]) * lush;
-          g = SOIL[1] + (base[1] - SOIL[1]) * lush;
-          b = SOIL[2] + (base[2] - SOIL[2]) * lush;
-          if (bi === B.ICE || bi === B.DESERT || bi === B.MOUNTAIN) [r, g, b] = base;
+          const lush = this.K[i] > 0.05 ? Math.min(1, this.plant[i] / this.K[i]) : 0;
+          const v = this.landPlants ? 0 : this.volc[i] * 0.6;
+          const sr = SOIL[0] + (BASALT[0] - SOIL[0]) * v, sg = SOIL[1] + (BASALT[1] - SOIL[1]) * v, sb = SOIL[2] + (BASALT[2] - SOIL[2]) * v;
+          r = sr + (base[0] - sr) * lush;
+          g = sg + (base[1] - sg) * lush;
+          b = sb + (base[2] - sb) * lush;
+          if (bi === B.ICE || (bi === B.DESERT && this.landPlants) || bi === B.MOUNTAIN) [r, g, b] = base;
           if (bi === B.MOUNTAIN && this.temp[i] < -2) [r, g, b] = [0.92, 0.93, 0.96];
         }
       } else if (mode === 'temperature') {
-        [r, g, b] = ramp(TEMP_RAMP, (this.temp[i] + 30) / 70);
+        [r, g, b] = ramp(TEMP_RAMP, (this.temp[i] + 30) / 100);
       } else if (mode === 'moisture') {
         [r, g, b] = ramp(MOIST_RAMP, this.moist[i]);
         if (this.water[i]) { r *= 0.35; g *= 0.35; b *= 0.45; }
@@ -349,17 +505,22 @@ export class Planet {
         [r, g, b] = e < 0 ? ramp(DEPTH_RAMP, 1 + e) : ramp(HEIGHT_RAMP, e / (1 - this.seaLevel));
       } else if (mode === 'plants') {
         [r, g, b] = ramp(PLANT_RAMP, this.plant[i]);
+      } else if (mode === 'organics') {
+        [r, g, b] = this.water[i] ? ramp(ORGANIC_RAMP, this.organics[i] / 4) : [0.12, 0.11, 0.1];
+        const v = this.volc[i] * 0.5;
+        r += v * 0.6; g += v * 0.1;
       }
       out[i * 3] = r; out[i * 3 + 1] = g; out[i * 3 + 2] = b;
     }
   }
 }
 
-const TEMP_RAMP = [[0.2, 0.25, 0.75], [0.3, 0.65, 0.95], [0.95, 0.95, 0.85], [0.98, 0.65, 0.25], [0.8, 0.15, 0.12]];
+const TEMP_RAMP = [[0.2, 0.25, 0.75], [0.3, 0.65, 0.95], [0.95, 0.95, 0.85], [0.98, 0.65, 0.25], [0.8, 0.15, 0.12], [0.45, 0.05, 0.1]];
 const MOIST_RAMP = [[0.75, 0.55, 0.3], [0.8, 0.8, 0.5], [0.35, 0.7, 0.55], [0.2, 0.45, 0.85]];
 const DEPTH_RAMP = [[0.02, 0.05, 0.2], [0.1, 0.3, 0.6]];
 const HEIGHT_RAMP = [[0.25, 0.5, 0.25], [0.75, 0.7, 0.4], [0.55, 0.42, 0.32], [0.95, 0.95, 0.95]];
 const PLANT_RAMP = [[0.08, 0.06, 0.05], [0.25, 0.35, 0.1], [0.3, 0.85, 0.25]];
+const ORGANIC_RAMP = [[0.04, 0.08, 0.16], [0.35, 0.3, 0.15], [0.85, 0.6, 0.2], [1, 0.9, 0.55]];
 
 function ramp(stops, t) {
   t = Math.min(1, Math.max(0, t)) * (stops.length - 1);

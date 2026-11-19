@@ -1,18 +1,21 @@
 # StrangeLife
 
-A planet-scale evolution sandbox that runs in the browser. It draws on SimEarth, SimLife, and the artificial-life simulations researchers use to study evolution.
+A planet-scale evolution sandbox that runs in the browser, inspired by SimEarth, SimLife and the real science of how life on Earth began and diversified.
 
-You start with a young, procedurally generated planet and a single microscopic species in a warm, shallow sea. Every creature after that descends from it. Spin the globe, zoom down to the coastlines, and watch life spread, split into species, crawl onto land, grow large, and start hunting. Or step in: raise mountains, warm the poles, flood the lowlands, seed new organisms, or drop a meteor.
+You start with a newborn planet: scalding seas under a thick CO₂ sky, a dim young Sun, comets raining down, and no life at all. Make it habitable, or wait for it to cool on its own, until chemistry in a warm, organic-rich shallow sea produces the first cell. Then watch life spread across the globe and branch into every domain: Bacteria, Archaea, protists, algae and plants, fungi, and animals. Oxygen from photosynthesis rusts the oceans and then fills the sky. An ozone layer forms, plants creep onto land, and animals follow, all the way to intelligence. Life icons on the globe show what lives where.
 
 ## Play
 
-It's a static site with no build step and no dependencies to install (Three.js is vendored in `vendor/`). ES modules need a web server, so from the repo root run:
+It's a static site with no build step (Three.js is vendored in `vendor/`). ES modules need a web server, so from the repo root:
 
 ```bash
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000>. To get a specific planet, add a seed: `http://localhost:8000/?seed=42`.
+Then open <http://localhost:8000>. URL options:
+
+- `?seed=42` picks a specific planet.
+- `&start=microbial` or `&start=oxygen` skips ahead (the default `barren` starts before life).
 
 To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Deploy from a branch*, and pick `main` / root.
 
@@ -21,79 +24,109 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 | | |
 |---|---|
 | Drag | Spin the planet |
-| Scroll / pinch | Zoom |
-| `1`–`9` | Tools: inspect, raise, lower, warm, cool, rain, drought, seed life, meteor |
+| Scroll / pinch | Zoom. Zoomed out you see one life icon per region; zoomed in, up to three per zone |
+| `1`–`9`, `0`, `-`, `=` | Tools: inspect, raise land, lower land, volcano, warm, cool, rain, drought, lightning, icy comet, seed life, asteroid |
 | Left-drag (with a terraform tool) | Paint. With a terraform tool selected, right-drag spins the globe |
 | `Space` | Pause / resume |
 | `[` `]` | Slower / faster |
 | `H` | Help |
 
-The side panel has four tabs:
+The panel on the right has five tabs:
 
-- **Species** lists living species with their traits. Click one to highlight it on the globe.
-- **History** charts population by species, biodiversity, and temperature, plus a chronicle of events.
-- **Tree of life** draws the phylogeny.
-- **World** holds the climate, sea level, and mutation sliders, the map overlays (biomes, heat, rain, height, plants), and new-world generation.
+- **Life** lists living species grouped by kingdom. Click one to light up its range on the globe.
+- **Planet** shows the current eon, atmosphere gauges, and *the story of life*: a checklist of major transitions that shows the next goal and what it needs.
+- **History** charts species per kingdom, oxygen, CO₂ and temperature, plus a chronicle of events.
+- **Tree** is the phylogeny, coloured by kingdom, with eon boundaries.
+- **World** holds map views, climate and evolution sliders, display options, and new-world generation.
 
-## How the simulation works
+## The science in the simulation
 
-**Planet.** The surface is a geodesic grid of 40,962 cells (a 6× subdivided icosahedron). Terrain comes from domain-warped fractal noise, tuned so about 31% of the surface is land. Each cell has:
+Everything below emerges from the simulation. Nothing is scripted to happen at a set time.
 
-- **Temperature.** It falls with latitude and altitude. Oceans moderate it, and continental interiors swing to extremes.
-- **Moisture.** It depends on noise, distance to the ocean, a Hadley-cell pattern (wet equator, subtropical deserts, stormy mid-latitudes), and rain shadows.
-- **A Whittaker-style biome** with a plant carrying capacity. Plants regrow logistically and get grazed down.
+### The planet
+- **Geodesic grid.** The terrain uses 40,962 cells. Life lives in 2,562 zones (each about 450 km across), roughly SimEarth's scale.
+- **Faint young Sun.** It starts at 76% of today's brightness and slowly brightens.
+- **Carbon–silicate cycle.** Volcanoes add CO₂. Rock weathering removes it, faster when it's warm, wet and plant-covered. This thermostat cools the scalding early planet over a few hundred million years, and land plants cool it further.
+- **Ice–albedo feedback.** Ice reflects sunlight, so the planet can tip into a **snowball** state. It escapes when volcanic CO₂ builds up.
+- **Water delivery.** Volcanic outgassing and icy comets fill the ocean basins over time.
 
-**Creatures.** Each creature has a genome of 8 genes:
+### The origin of life (abiogenesis)
+- **Making organic molecules.** Hydrothermal **vents**, **lightning** in an oxygen-free sky (the Miller–Urey experiment), and **comets** all supply them.
+- **Concentrating them.** Wet–dry cycles in **tidal pools** near coasts concentrate the molecules. Hot water, dry land and oxygen destroy them.
+- **The RNA world.** When a warm (5–50 °C) shallow sea stays rich in organics long enough, the RNA-world progress bar fills and **LUCA**, the first cell, appears. Use the Organics map view to see where chemistry is brewing.
 
-| Gene | Effect | Trade-off |
-|---|---|---|
-| Size | Bigger bites, more energy storage, can eat bigger prey, harder to catch | Metabolism scales with size^0.75; matures later |
-| Speed | Covers more ground, catches and escapes | Cost grows with speed² |
-| Diet | 0 = plants only, 1 = meat only | Specialists eat their food more efficiently |
-| Climate | Preferred temperature | Stress costs energy outside the comfort range |
-| Tolerance | Width of the comfort range | Wider tolerance has an upkeep cost |
-| Habitat | 0 = land, 1 = water | Living in the "wrong" medium is costly, quadratically, so shoreline amphibians are viable |
-| Colour | Neutral marker, drifts slowly | None. It makes lineages visible |
-| Brood | Many small young vs. few large ones | r/K strategy |
+### Ecology: populations, not individuals
+Each zone holds the biomass of every species living there:
+- **Producers** (cyanobacteria, algae, plants) grow logistically and compete for light.
+- **Consumers** feed from shared pools with a saturating (Holling type II) response: chemotrophs on organic molecules, grazers on producers or microbes, predators on grazers, decomposers on dead matter.
+- **Decomposers and mycorrhizal fungi** recycle nutrients, which boosts plant growth.
+- **Flowering plants need pollinators.** Without insects or birds, they grow poorly.
+- **Allee effect.** Tiny populations struggle to recover.
+- **Dispersal.** A share of every population spreads to neighbouring zones with suitable habitat. That's how life visibly spreads across the map.
 
-Creatures move toward cells with food, prey, and a comfortable climate. They pay metabolic costs, graze or hunt, and reproduce asexually when they have enough energy, passing on a mutated copy of their genome. Nothing is scripted: herbivores, amphibians, land animals, predators, and megafauna all emerge from selection on these trade-offs.
+### Evolution
+- **Adaptation.** Each species' preferred temperature drifts toward the climates it actually lives in.
+- **Speciation.** Stressed populations at the edge of a range split off as new species with a new temperature niche, diet, habitat or body size. Sexual species split faster. Speciation slows as a niche fills (diversity-dependent diversification), and crowded niches squeeze out their rarest members (competitive exclusion).
+- **Major transitions** are rare events that found new lineages, once the planet allows them:
 
-**Species.** Each species keeps a reference genome that slowly tracks its population's mean. When an offspring is born too far from that reference (a weighted genetic distance), it founds a new species with a new Latin binomial and a shifted colour. The parent link is recorded, and that's what builds the tree of life.
+| Transition | What it needs |
+|---|---|
+| Bacteria → Archaea | — |
+| Bacteria → Cyanobacteria (photosynthesis) | Sunlit seas |
+| Archaea + bacteria → Protists (endosymbiosis: mitochondria) | Both in one zone, a trace of O₂ |
+| Protists + cyanobacteria → Algae (chloroplasts) | Both in one zone |
+| Protists → Fungi / Sponges & cnidarians | ~1% / ~3% O₂ |
+| Algae → Seaweeds (multicellularity) | ~2% O₂ |
+| Seaweeds → Mosses (plants on land) | An ozone shield and a coast |
+| Mosses → Ferns → Conifers → Flowering plants | O₂; flowers need insects |
+| Sponges → Arthropods (Cambrian explosion) | ~7% O₂ |
+| Arthropods → Insects (animals on land) | Land plants, ozone |
+| Arthropods → Fish → Amphibians → Reptiles → Mammals / Birds | Rising O₂; tetrapods need land plants and insects |
+| Mammals → Marine mammals / Intelligence | A coast / ~14% O₂ and a widespread lineage |
 
-**Disasters.** A meteor kills everything near the impact, carves a crater, and adds an *impact winter*: global cooling and suppressed plant growth that fade over time. Combine it with the greenhouse slider for mass extinctions.
+- **Oxygen paces complexity.** Complex cells and bodies need aerobic respiration. Most archaea are strict anaerobes and decline after oxygenation.
+- **Great Oxidation Event.** Photosynthesis first rusts the iron dissolved in the oceans (banded iron formations). Only then does oxygen accumulate.
+- **The "boring billion."** Volcanic gases keep soaking up oxygen while the planet is young.
+- **Wildfires.** Above ~21% oxygen, fires hold it down.
+- **Ozone.** It forms once there's oxygen and shields land from ultraviolet light. Before that, dry land is sterile.
+- **Mass extinctions.** Asteroids and climate swings cause them, followed by adaptive radiations.
+
+### Deep time
+Each tick lasts longer while life is microbial (Hadean, Archean, Proterozoic) and shorter in the Phanerozoic, so the whole story fits in a session. The Planet tab compares your planet's milestones with when they happened on Earth.
 
 ## Code layout
 
 ```
-index.html        page shell and UI markup
-style.css         styles
-src/rng.js        seeded RNG + 3D Perlin noise
-src/planet.js     geodesic grid, terrain, climate, biomes, plants (no rendering)
-src/life.js       genomes, behaviour, energy, reproduction, speciation (no rendering)
-src/names.js      procedural species names
-src/world.js      planet + life + history, milestones
-src/render.js     Three.js globe, ocean, atmosphere, clouds, creatures, picking, effects
-src/ui.js         panels, charts, tree of life, inspector
-src/main.js       bootstrap, tools, input, game loop
+index.html          page shell and UI markup
+style.css           styles
+src/rng.js          seeded RNG + 3D Perlin noise
+src/planet.js       geodesic grid, terrain, climate, carbon cycle, oxygen, prebiotic chemistry
+src/ecosystem.js    zones, species, population ecology, dispersal, speciation, major transitions
+src/world.js        planet + ecosystem, abiogenesis, eons, natural events, history, milestones
+src/science.js      the story of life: real-science notes for each transition
+src/names.js        procedural Latin names, styled by group
+src/render.js       Three.js globe, ocean, atmosphere, clouds, life icons, picking, effects
+src/ui.js           panels, charts, tree of life, planet story, inspector, discovery cards
+src/main.js         bootstrap, tools, input, game loop
 tools/headless.mjs  run the simulation in Node without graphics
-vendor/           three.js r160 + OrbitControls (MIT)
+vendor/             three.js r160 + OrbitControls (MIT)
 ```
 
 The simulation code doesn't depend on Three.js or the DOM, so you can tune it headless:
 
 ```bash
-node tools/headless.mjs 7 5000
+node tools/headless.mjs 7 20000 barren 2000
 ```
 
-The arguments are the seed and the number of ticks.
+The arguments are the seed, the number of ticks, the scenario, and how often to report.
 
 ## Ideas for later
 
-- Sexual reproduction and geographic speciation driven by isolation
-- Plate tectonics and continental drift
-- An oxygen/CO₂ atmosphere loop coupled to plant life (Gaia feedback)
+- Plate tectonics and continental drift (and the supercontinent cycle)
+- Methane and an Archean organic haze
+- Civilization once intelligence appears (SimEarth's tech ages)
 - Saving and loading worlds
-- A creature editor for designing your own seed organisms
+- A creature/plant designer for seeding your own lineages
 
 ## License
 

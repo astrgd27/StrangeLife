@@ -4,30 +4,35 @@ import * as THREE from 'three';
 import { World } from './world.js';
 import { Renderer } from './render.js';
 import { UI } from './ui.js';
-import { PRESETS } from './life.js';
+import { GRADES, GRADE_KEYS } from './ecosystem.js';
 
 const $ = (id) => document.getElementById(id);
 
 const TOOLS = [
-  { id: 'inspect', icon: '🔍', name: 'Inspect', hint: 'Click a creature or a place to learn about it. Drag to spin the planet.' },
-  { id: 'raise', icon: '⛰️', name: 'Raise land', hint: 'Paint to lift the ground. Push the seabed above the waves to make new land.', paint: true },
-  { id: 'lower', icon: '🌊', name: 'Lower land', hint: 'Paint to sink the ground and carve out seas and straits.', paint: true },
-  { id: 'heat', icon: '🔥', name: 'Warm', hint: 'Paint to warm the local climate. Melt ice caps, bake deserts.', paint: true },
-  { id: 'cool', icon: '❄️', name: 'Cool', hint: 'Paint to cool the local climate. Grow glaciers.', paint: true },
-  { id: 'wet', icon: '🌧️', name: 'Rain', hint: 'Paint to bring rain. Deserts turn to grassland and forest.', paint: true },
-  { id: 'dry', icon: '🏜️', name: 'Drought', hint: 'Paint to dry the land out.', paint: true },
-  { id: 'seed', icon: '🧬', name: 'Seed life', hint: 'Click to release a new species. Pick the organism below.' },
-  { id: 'meteor', icon: '☄️', name: 'Meteor', hint: 'Click to strike. Wipes out life nearby and plunges the planet into an impact winter.' },
+  { id: 'inspect', key: '1', icon: '🔍', name: 'Inspect', hint: 'Click anywhere to see its climate and the life living there. Drag to spin the planet.' },
+  { id: 'raise', key: '2', icon: '⛰️', name: 'Raise land', hint: 'Paint to lift the ground. Push the seabed up to make shallow seas, coasts and new land.', paint: true },
+  { id: 'lower', key: '3', icon: '🌊', name: 'Lower land', hint: 'Paint to sink the ground and carve out seas and straits.', paint: true },
+  { id: 'volcano', key: '4', icon: '🌋', name: 'Volcano', hint: 'Paint to build volcanoes. They vent CO₂ (warming the planet) and, under water, create hydrothermal vents where organic molecules form.', paint: true },
+  { id: 'heat', key: '5', icon: '🔥', name: 'Warm', hint: 'Paint to warm the local climate.', paint: true },
+  { id: 'cool', key: '6', icon: '❄️', name: 'Cool', hint: 'Paint to cool the local climate. Too much ice can tip the whole planet into a snowball.', paint: true },
+  { id: 'wet', key: '7', icon: '🌧️', name: 'Rain', hint: 'Paint to bring rain. Deserts turn green once plants arrive.', paint: true },
+  { id: 'dry', key: '8', icon: '🏜️', name: 'Drought', hint: 'Paint to dry the land out.', paint: true },
+  { id: 'lightning', key: '9', icon: '⚡', name: 'Lightning', hint: 'Click to strike. Lightning in an oxygen-free sky makes amino acids in the water below (the Miller–Urey experiment).' },
+  { id: 'comet', key: '0', icon: '☄️', name: 'Icy comet', hint: 'Click to drop a comet. It brings water (raising the seas) and organic molecules from space.' },
+  { id: 'seed', key: '-', icon: '🧬', name: 'Seed life', hint: 'Click to release an organism adapted to the local temperature. It will only thrive if the planet can support it.' },
+  { id: 'meteor', key: '=', icon: '💥', name: 'Asteroid', hint: 'Click to strike. Wipes out life nearby and plunges the planet into an impact winter.' },
 ];
-const SPEEDS = [0, 8, 30, 120, 480]; // ticks per second
+const SPEEDS = [0, 8, 30, 120, 400]; // ticks per second
 
 const params = new URLSearchParams(location.search);
 let seed = +params.get('seed') || Math.floor(Math.random() * 99999) + 1;
-let world = new World(seed);
+let scenario = params.get('start') || 'barren';
+let world = new World(seed, { scenario });
 const renderer = new Renderer($('view'), world);
-const ui = new UI(renderer, {});
+const ui = new UI(renderer);
 ui.setWorld(world);
 $('seed-input').value = seed;
+$('scenario').value = scenario;
 
 let tool = 'inspect';
 let speed = 2;
@@ -35,22 +40,22 @@ let speed = 2;
 // ---------- tools ----------
 
 const toolList = $('tool-list');
-TOOLS.forEach((t, i) => {
+TOOLS.forEach((t) => {
   const b = document.createElement('button');
   b.className = 'tool';
   b.dataset.tool = t.id;
-  b.title = `${t.name} (${i + 1})`;
+  b.title = `${t.name} (${t.key})`;
   b.setAttribute('aria-label', t.name);
-  b.innerHTML = `<span aria-hidden="true">${t.icon}</span><span class="k">${i + 1}</span>`;
+  b.innerHTML = `<span aria-hidden="true">${t.icon}</span><span class="k">${t.key}</span>`;
   b.addEventListener('click', () => setTool(t.id));
   toolList.appendChild(b);
 });
-for (const [k, p] of Object.entries(PRESETS)) {
+for (const g of GRADE_KEYS) {
   const o = document.createElement('option');
-  o.value = k; o.textContent = p.label;
+  o.value = g; o.textContent = `${GRADES[g].icon} ${GRADES[g].name}`;
   $('seed-preset').appendChild(o);
 }
-$('seed-preset').value = 'grazer';
+$('seed-preset').value = 'bacteria';
 
 function setTool(id) {
   tool = id;
@@ -91,15 +96,19 @@ let lastSpeed = 2;
 // ---------- pointer input ----------
 
 const view = $('view');
-let down = null;      // pointer-down info
+let down = null;
 let painting = false;
 let hoverCell = -1;
 let terrainEdited = false;
 let lastClimateUpdate = 0;
 const brushRadius = () => +$('brush-size').value;
+const toolRadius = () => {
+  const t = TOOLS.find((x) => x.id === tool);
+  return t.paint ? brushRadius() : tool === 'meteor' ? 0.3 : tool === 'comet' ? 0.22 : tool === 'lightning' ? 0.06 : 0.12;
+};
 
 view.addEventListener('pointerdown', (e) => {
-  down = { x: e.clientX, y: e.clientY, button: e.button, type: e.pointerType, t: performance.now() };
+  down = { x: e.clientX, y: e.clientY, button: e.button, type: e.pointerType };
   const t = TOOLS.find((x) => x.id === tool);
   if (t.paint && e.pointerType === 'mouse' && e.button === 0) {
     painting = true;
@@ -110,8 +119,7 @@ view.addEventListener('pointerdown', (e) => {
 view.addEventListener('pointermove', (e) => {
   if (tool === 'inspect') return;
   hoverCell = renderer.pickCell(e.clientX, e.clientY);
-  const t = TOOLS.find((x) => x.id === tool);
-  renderer.showCursor(hoverCell, t.paint ? brushRadius() : tool === 'meteor' ? 0.3 : 0.12);
+  renderer.showCursor(hoverCell, toolRadius());
 });
 
 view.addEventListener('pointerleave', () => { if (!painting) renderer.showCursor(-1); });
@@ -130,28 +138,37 @@ function click(x, y, pointerType) {
   const cell = renderer.pickCell(x, y);
   if (cell < 0) return;
   const t = TOOLS.find((q) => q.id === tool);
+  const P = world.planet, E = world.eco;
   if (tool === 'inspect') {
-    const i = renderer.nearestCreature(cell);
-    if (i >= 0) ui.showCreature(i); else ui.showCell(cell);
+    ui.inspect(cell);
   } else if (tool === 'seed') {
-    const p = PRESETS[$('seed-preset').value];
-    const genes = p.genes.slice();
-    genes[6] = Math.random();
-    const sp = world.life.seed(cell, genes, 40);
-    ui.toast(`You seeded ${sp.name} (${p.label.toLowerCase()}).`, 'star');
-    ui.chronicle(world.tick, `${sp.name} was seeded onto the planet.`);
+    const g = $('seed-preset').value;
+    const sp = E.seed(g, E.zoneOf[cell], { seeded: true });
+    if (!sp) { ui.toast('Too many species alive to add another right now.', 'bad'); return; }
+    if (!E.habitatOk(sp.habitat, E.zoneOf[cell])) ui.toast(`${GRADES[g].name} need ${['open sea', 'a coastline', 'dry land'][sp.habitat]} to live.`, 'bad');
+    else ui.toast(`You seeded ${sp.icon} ${sp.name} (${GRADES[g].name.toLowerCase()}).`, 'star');
+    ui.chronicle(world.tick, `${sp.icon} ${sp.name} was seeded onto the planet.`);
+    renderer.updateIcons();
   } else if (tool === 'meteor') {
     renderer.launchMeteor(cell, () => {
-      const killed = world.life.disaster(cell, 0.3);
-      world.planet.impact(cell);
+      world.asteroid(cell);
       renderer.updateTerrain();
-      const msg = `Meteor impact! ${killed.toLocaleString()} creatures killed. Dust darkens the sky.`;
-      ui.toast(msg, 'bad');
-      ui.chronicle(world.tick, msg, true);
+      renderer.updateIcons();
+      ui.toast('💥 Asteroid impact! Life nearby is wiped out and dust darkens the sky.', 'bad');
+      ui.chronicle(world.tick, 'An asteroid strikes. An impact winter follows.', true);
     });
+  } else if (tool === 'comet') {
+    renderer.launchMeteor(cell, () => {
+      world.comet(cell);
+      renderer.updateTerrain();
+      ui.toast('☄️ A comet delivers water and organic molecules.', '');
+    }, 'comet');
+  } else if (tool === 'lightning') {
+    renderer.lightning(cell);
+    P.lightning(cell, 0.06);
+    renderer.updateColors();
   } else if (t.paint && pointerType !== 'mouse') {
-    // touch: a tap applies one dab
-    applyPaint(cell, 0.25);
+    applyPaint(cell, 0.25); // touch: a tap applies one dab
     finishStroke();
   }
 }
@@ -162,6 +179,7 @@ function applyPaint(cell, dt) {
   switch (tool) {
     case 'raise': P.editElevation(cell, r, 0.45 * dt); terrainEdited = true; break;
     case 'lower': P.editElevation(cell, r, -0.45 * dt); terrainEdited = true; break;
+    case 'volcano': P.volcano(cell, r, dt); terrainEdited = true; break;
     case 'heat': P.editClimate(cell, r, 14 * dt, 0); break;
     case 'cool': P.editClimate(cell, r, -14 * dt, 0); break;
     case 'wet': P.editClimate(cell, r, 0, 0.6 * dt); break;
@@ -175,17 +193,20 @@ function applyPaint(cell, dt) {
 function finishStroke() {
   if (terrainEdited) { world.planet.terrainChanged(); renderer.updateTerrain(); terrainEdited = false; }
   else { world.planet.updateClimate(); renderer.updateColors(); }
+  world.eco.updateEnvironment();
+  renderer.updateIcons();
 }
 
 // ---------- keyboard ----------
 
 window.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea')) return;
-  if (e.key >= '1' && e.key <= '9') setTool(TOOLS[+e.key - 1].id);
+  const t = TOOLS.find((x) => x.key === e.key);
+  if (t) setTool(t.id);
   else if (e.key === ' ') { e.preventDefault(); if (speed) { lastSpeed = speed; setSpeed(0); } else setSpeed(lastSpeed || 2); }
   else if (e.key === ']') setSpeed(speed + 1);
   else if (e.key === '[') setSpeed(speed - 1);
-  else if (e.key === 'Escape') { setTool('inspect'); $('intro').hidden = true; }
+  else if (e.key === 'Escape') { setTool('inspect'); $('intro').hidden = true; if (renderer.highlight) ui.setHighlight(null); }
   else if (e.key === 'h' || e.key === 'H') $('intro').hidden = !$('intro').hidden;
 });
 
@@ -198,39 +219,45 @@ const bindRange = (id, out, fmt, apply) => {
   return () => { $(out).textContent = fmt(+el.value); };
 };
 const refreshGreenhouse = bindRange('greenhouse', 'out-greenhouse', (v) => `${v > 0 ? '+' : ''}${v}°C`, (v) => {
-  world.planet.globalTemp = v; world.planet.updateClimate(); renderer.updateColors();
+  world.planet.globalTemp = v; world.planet.updateClimate(); world.eco.updateEnvironment(); renderer.updateColors();
 });
-const refreshSea = bindRange('sea-level', 'out-sea', (v) => `${v > 0 ? '+' : ''}${Math.round(v * (v > 0 ? 6000 : 5200))} m`, (v) => {
-  world.planet.seaLevel = v; world.planet.terrainChanged(); renderer.updateTerrain();
+const seaFmt = (v) => `${v > 0 ? '+' : ''}${Math.round(v * (v > 0 ? 6000 : 5200))} m`;
+const refreshSea = bindRange('sea-level', 'out-sea', seaFmt, (v) => {
+  world.planet.seaLevel = v; world.planet.terrainChanged(); world.eco.updateEnvironment(); renderer.updateTerrain(); renderer.updateIcons();
 });
-const refreshMut = bindRange('mutation', 'out-mut', (v) => `${v.toFixed(1)}×`, (v) => { world.life.mutationRate = v; });
-const refreshGrowth = bindRange('growth', 'out-growth', (v) => `${v.toFixed(2)}×`, (v) => { world.planet.plantGrowth = 0.035 * v; });
+const refreshMut = bindRange('mutation', 'out-mut', (v) => `${v.toFixed(1)}×`, (v) => { world.eco.mutationRate = v; });
+const refreshTrans = bindRange('transitions', 'out-trans', (v) => `${v.toFixed(1)}×`, (v) => { world.eco.transitionRate = v; });
 
 document.querySelectorAll('#overlay-seg button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('#overlay-seg button').forEach((x) => x.classList.toggle('active', x === b));
   renderer.overlay = b.dataset.overlay;
   renderer.updateColors();
 }));
+$('show-icons').addEventListener('change', (e) => { renderer.showIcons = e.target.checked; renderer.updateIcons(); });
 $('show-clouds').addEventListener('change', (e) => (renderer.showClouds = e.target.checked));
 $('show-atmo').addEventListener('change', (e) => (renderer.atmosphere.visible = e.target.checked));
-$('show-life').addEventListener('change', (e) => (renderer.grazers.visible = renderer.hunters.visible = e.target.checked));
+$('show-cards').addEventListener('change', (e) => { ui.showCards = e.target.checked; if (!ui.showCards) { ui.cards = []; ui.renderCard(); } });
+$('natural-events').addEventListener('change', (e) => (world.naturalEvents = e.target.checked));
 $('auto-rotate').addEventListener('change', (e) => (renderer.controls.autoRotate = e.target.checked));
 $('btn-random-seed').addEventListener('click', () => ($('seed-input').value = Math.floor(Math.random() * 99999) + 1));
-$('btn-new-world').addEventListener('click', () => newWorld(+$('seed-input').value || 1));
+$('btn-new-world').addEventListener('click', () => newWorld(+$('seed-input').value || 1, $('scenario').value));
 
-function newWorld(s) {
-  seed = s;
-  world = new World(seed);
+function newWorld(s, sc) {
+  seed = s; scenario = sc;
+  world = new World(seed, { scenario });
+  world.eco.mutationRate = +$('mutation').value;
+  world.eco.transitionRate = +$('transitions').value;
+  world.naturalEvents = $('natural-events').checked;
   renderer.setWorld(world);
   ui.setWorld(world);
-  // apply current slider settings to the fresh world
-  world.life.mutationRate = +$('mutation').value;
-  world.planet.plantGrowth = 0.035 * +$('growth').value;
-  $('greenhouse').value = 0; $('sea-level').value = 0;
-  refreshGreenhouse(); refreshSea(); refreshMut(); refreshGrowth();
+  $('greenhouse').value = 0;
+  $('sea-level').value = world.planet.seaLevel;
+  refreshGreenhouse(); refreshSea(); refreshMut(); refreshTrans();
   ui.toast(`A new world forms (seed ${seed}).`, 'star');
-  try { history.replaceState(null, '', `?seed=${seed}`); } catch { /* sandboxed */ }
+  try { history.replaceState(null, '', `?seed=${seed}&start=${scenario}`); } catch { /* sandboxed */ }
 }
+$('sea-level').value = world.planet.seaLevel;
+refreshSea();
 
 $('btn-help').addEventListener('click', () => ($('intro').hidden = false));
 $('btn-start').addEventListener('click', () => ($('intro').hidden = true));
@@ -240,25 +267,33 @@ $('intro').addEventListener('click', (e) => { if (e.target.id === 'intro') $('in
 
 let last = performance.now();
 let acc = 0;
-let ticksSinceColor = 0;
+let ticksSinceRefresh = 0;
+let lastSea = world.planet.seaLevel;
 
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  const tps = SPEEDS[speed];
-  acc += dt * tps;
+  acc += dt * SPEEDS[speed];
   const t0 = performance.now();
   while (acc >= 1 && performance.now() - t0 < 14) {
     world.step();
     acc -= 1;
-    ticksSinceColor++;
+    ticksSinceRefresh++;
   }
   if (acc > 3) acc = 1; // can't keep up at this speed: drop ticks instead of spiralling
 
   if (painting && hoverCell >= 0) applyPaint(hoverCell, dt);
-  if (ticksSinceColor >= 6) { renderer.updateColors(); ticksSinceColor = 0; }
-
-  renderer.render(dt, tps > 40 ? 1 : Math.min(1, acc));
+  if (ticksSinceRefresh >= 6) {
+    ticksSinceRefresh = 0;
+    // sea level rises as comets and volcanoes add water: keep the globe and slider in step
+    if (Math.abs(world.planet.seaLevel - lastSea) > 0.002) {
+      lastSea = world.planet.seaLevel;
+      renderer.updateTerrain();
+      $('sea-level').value = lastSea; refreshSea();
+    } else renderer.updateColors();
+    renderer.updateIcons();
+  }
+  renderer.render(dt);
   ui.update(now);
   requestAnimationFrame(frame);
 }

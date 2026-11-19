@@ -8,12 +8,41 @@ const SPECIES_END = ['us', 'is', 'a', 'um', 'ensis', 'ii', 'ata', 'ica', 'oides'
 
 const pick = (rng, a) => a[Math.floor(rng() * a.length)];
 
-export function genusName(rng) {
+const GRADE_ENDS = {
+  bacteria: ['bacter', 'coccus', 'monas', 'spira', 'bacillus', 'vibrio'],
+  archaea: ['archaeon', 'thermus', 'sulfolobus', 'pyrus', 'halo', 'methanus'],
+  cyano: ['cystis', 'nostoc', 'chococcus', 'phyton', 'spirulina', 'chloris'],
+  protist: ['zoon', 'cystis', 'phrys', 'amoeba', 'ciliata', 'plasma'],
+  algae: ['chlorella', 'phycus', 'alga', 'monas', 'desmus', 'diatoma'],
+  seaweed: ['phycus', 'laminaria', 'fucus', 'ulva', 'kelpia', 'caulerpa'],
+  moss: ['bryum', 'sphagnum', 'marchantia', 'polytrichum', 'mnium'],
+  fern: ['pteris', 'equisetum', 'lepidodendron', 'filix', 'cyathea'],
+  conifer: ['pinus', 'abies', 'araucaria', 'sequoia', 'cedrus', 'taxus'],
+  flower: ['anthus', 'flora', 'rosa', 'magnolia', 'lilium', 'quercus'],
+  fungi: ['myces', 'spora', 'mucor', 'candida', 'aspergillus'],
+  mushroom: ['agaricus', 'boletus', 'myces', 'amanita', 'russula'],
+  sponge: ['spongia', 'cnida', 'medusa', 'coralia', 'hydra'],
+  arthropod: ['lobites', 'caris', 'pterus', 'crustis', 'pod', 'annelis'],
+  insect: ['ptera', 'opteron', 'scorpius', 'araneus', 'myrmex', 'blatta'],
+  fish: ['ichthys', 'odus', 'aspis', 'acanthus', 'selache', 'pisces'],
+  amphibian: ['stega', 'batrachus', 'salamandra', 'rana', 'ichthyostega'],
+  reptile: ['saurus', 'suchus', 'odon', 'raptor', 'ceratops', 'lacerta'],
+  mammal: ['therium', 'odon', 'lestes', 'cyon', 'felis', 'mys'],
+  bird: ['ornis', 'avis', 'pteryx', 'aquila', 'corvus'],
+  whale: ['cetus', 'delphis', 'balaena', 'physeter', 'orca'],
+  sapient: ['homo', 'sapiens', 'anthropus', 'pithecus'],
+};
+
+export function genusName(rng, grade = 'mammal') {
+  return genusWith(rng, GRADE_ENDS[grade] || GENUS_END);
+}
+
+function genusWith(rng, ends) {
   let s = pick(rng, START) + pick(rng, VOWEL);
   if (rng() < 0.7) s += pick(rng, MID) + pick(rng, VOWEL);
   const stripped = s.replace(/[aeiouy]+$/, '');
   if (/[aeiouy]/.test(stripped)) s = stripped;
-  s += pick(rng, GENUS_END);
+  s += pick(rng, ends);
   s = s.replace(/([^aeiou])\1+/g, '$1').replace(/([^aeiouy])([^aeiouy])([^aeiouyh])/g, '$1$3');
   return s[0].toUpperCase() + s.slice(1);
 }
