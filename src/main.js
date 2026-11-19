@@ -265,4 +265,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // expose for debugging in the console
-window.primordia = { get world() { return world; }, renderer, ui };
+window.strangelife = { get world() { return world; }, renderer, ui };

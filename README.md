@@ -1,4 +1,4 @@
-# Primordia
+# StrangeLife
 
 A planet-scale evolution sandbox that runs in the browser. It draws on SimEarth, SimLife, and the artificial-life simulations researchers use to study evolution.
 
