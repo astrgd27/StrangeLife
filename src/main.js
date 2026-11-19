@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { World } from './world.js';
 import { Renderer } from './render.js';
 import { UI } from './ui.js';
+import { TreeView } from './tree.js';
 import { GRADES, GRADE_KEYS } from './ecosystem.js';
 
 const $ = (id) => document.getElementById(id);
@@ -31,6 +32,8 @@ let world = new World(seed, { scenario });
 const renderer = new Renderer($('view'), world);
 const ui = new UI(renderer);
 ui.setWorld(world);
+const tree = new TreeView({ highlight: (sp) => { ui.setHighlight(sp); ui.showTab('life'); } });
+tree.setWorld(world);
 $('seed-input').value = seed;
 $('scenario').value = scenario;
 
@@ -206,6 +209,8 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === ' ') { e.preventDefault(); if (speed) { lastSpeed = speed; setSpeed(0); } else setSpeed(lastSpeed || 2); }
   else if (e.key === ']') setSpeed(speed + 1);
   else if (e.key === '[') setSpeed(speed - 1);
+  else if (e.key === 't' || e.key === 'T') tree.toggle();
+  else if (e.key === 'Escape' && tree.isOpen) tree.toggle(false);
   else if (e.key === 'Escape') { setTool('inspect'); $('intro').hidden = true; if (renderer.highlight) ui.setHighlight(null); }
   else if (e.key === 'h' || e.key === 'H') $('intro').hidden = !$('intro').hidden;
 });
@@ -250,6 +255,7 @@ function newWorld(s, sc) {
   world.naturalEvents = $('natural-events').checked;
   renderer.setWorld(world);
   ui.setWorld(world);
+  tree.setWorld(world);
   $('greenhouse').value = 0;
   $('sea-level').value = world.planet.seaLevel;
   refreshGreenhouse(); refreshSea(); refreshMut(); refreshTrans();
@@ -295,9 +301,10 @@ function frame(now) {
   }
   renderer.render(dt);
   ui.update(now);
+  tree.update(now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
 // expose for debugging in the console
-window.strangelife = { get world() { return world; }, renderer, ui };
+window.strangelife = { get world() { return world; }, renderer, ui, tree };

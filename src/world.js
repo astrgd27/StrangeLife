@@ -137,6 +137,20 @@ export class World {
     this.emit({ type: 'eon', eon: e });
   }
 
+  // planet age at a given tick (ticks last longer in the early eons)
+  yearsAt(tick) {
+    let y = this.planet.startYears, t = 0;
+    const marks = this.eonTicks;
+    for (let i = 0; i < marks.length; i++) {
+      const end = i + 1 < marks.length ? marks[i + 1].tick : Infinity;
+      const span = Math.max(0, Math.min(tick, end) - t);
+      y += span * EONS[marks[i].eon].yearsPerTick;
+      t += span;
+      if (tick <= end) break;
+    }
+    return y;
+  }
+
   achieve(keys, silent = false) {
     for (const key of keys) {
       if (this.milestones.has(key)) continue;

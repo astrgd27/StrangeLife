@@ -42,6 +42,7 @@
     <div><dt>Oxygen</dt><dd id="stat-o2" class="mono">0%</dd></div>
   </dl>
   <div class="top-actions">
+    <button id="btn-tree" class="ghost tree-btn" title="Tree of life (T)"><span aria-hidden="true">🌳</span> Tree of life</button>
     <button id="btn-help" class="ghost" title="How to play (H)">?</button>
   </div>
 </header>
@@ -65,7 +66,6 @@
     <button role="tab" data-tab="life" class="active">Life</button>
     <button role="tab" data-tab="planet">Planet</button>
     <button role="tab" data-tab="history">History</button>
-    <button role="tab" data-tab="tree">Tree</button>
     <button role="tab" data-tab="world">World</button>
     <button class="collapse" id="btn-collapse" title="Hide panel" aria-label="Hide panel">›</button>
   </div>
@@ -92,11 +92,6 @@
     <div class="legend small"><span><i class="key-o2"></i>Oxygen</span><span><i class="key-co2"></i>CO₂ (log)</span><span><i class="key-temp"></i>Temperature</span></div>
     <h3>Chronicle</h3>
     <ol class="chronicle" id="chronicle"></ol>
-  </section>
-
-  <section class="tab-body" data-body="tree" hidden>
-    <p class="muted small">Each line is a species, from its origin to now or its extinction, coloured by kingdom. Branches show who descended from whom. Click a living species to see its range.</p>
-    <div class="tree-wrap"><canvas id="tree" class="tree"></canvas></div>
   </section>
 
   <section class="tab-body" data-body="world" hidden>
@@ -149,6 +144,42 @@
 
 <section class="inspector" id="inspector" hidden></section>
 
+<section class="treeview" id="treeview" hidden aria-label="Tree of life">
+  <header class="tree-head">
+    <div class="tree-title">
+      <h2>Tree of life</h2>
+      <p class="muted small" id="tree-sub"></p>
+    </div>
+    <div class="tree-controls">
+      <div class="seg" id="tree-mode" role="group" aria-label="View">
+        <button data-mode="groups" class="active">Major groups</button>
+        <button data-mode="species">Species</button>
+      </div>
+      <label class="tree-show" id="tree-show-wrap" hidden>
+        <select id="tree-show" aria-label="Which species">
+          <option value="key">Living + major extinct</option>
+          <option value="all">Every species ever</option>
+        </select>
+      </label>
+      <div class="seg" role="group" aria-label="Time zoom">
+        <button id="tree-zoom-out" title="Zoom out in time">−</button>
+        <button id="tree-fit" title="Fit all of time">Fit</button>
+        <button id="tree-zoom-in" title="Zoom in on time">+</button>
+      </div>
+      <button class="ghost tree-close" id="tree-close" title="Close (Esc)" aria-label="Close">×</button>
+    </div>
+    <div class="tree-kingdoms" id="tree-kingdoms"></div>
+  </header>
+  <div class="tree-body">
+    <div class="tree-axis"><canvas id="tree-axis"></canvas></div>
+    <div class="tree-now mono">NOW</div>
+    <div class="tree-scroll" id="tree-scroll"><canvas id="tree-canvas"></canvas></div>
+    <div class="tree-labels" id="tree-labels"><canvas id="tree-labels-canvas"></canvas></div>
+  </div>
+  <footer class="tree-detail" id="tree-detail"></footer>
+  <div class="tree-tip" id="tree-tip" hidden></div>
+</section>
+
 <section class="card" id="card" hidden aria-live="polite">
   <div class="card-icon" id="card-icon"></div>
   <div class="card-body">
@@ -172,7 +203,7 @@
       <li><b>Watch it evolve.</b> Oxygen from photosynthesis rusts the oceans, then fills the sky. Complex cells, multicellular life, land plants and animals each need the planet to be ready.</li>
       <li><b>Meddle.</b> Raise continents, warm or freeze the climate, seed organisms, or drop an asteroid and see who survives.</li>
     </ul>
-    <p class="muted small">With a terraforming tool selected, left-drag paints and right-drag spins. Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd>, <kbd>-</kbd>, <kbd>=</kbd> tools, <kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> speed.</p>
+    <p class="muted small">With a terraforming tool selected, left-drag paints and right-drag spins. Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd>, <kbd>-</kbd>, <kbd>=</kbd> tools, <kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> speed, <kbd>T</kbd> tree of life.</p>
     <button id="btn-start" class="primary big">Begin</button>
   </div>
 </div>

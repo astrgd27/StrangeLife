@@ -29,14 +29,16 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 | Left-drag (with a terraform tool) | Paint. With a terraform tool selected, right-drag spins the globe |
 | `Space` | Pause / resume |
 | `[` `]` | Slower / faster |
+| `T` | Tree of life |
 | `H` | Help |
 
-The panel on the right has five tabs:
+The **🌳 Tree of life** button (or `T`) opens a full-screen view. *Major groups* is a spindle diagram: each group's thickness over time is how many species it had. *Species* is the full phylogeny, which you can filter by kingdom or group and zoom in time. Living species are named at the tips.
+
+The panel on the right has four tabs:
 
 - **Life** lists living species grouped by kingdom. Click one to light up its range on the globe.
 - **Planet** shows the current eon, atmosphere gauges, and *the story of life*: a checklist of major transitions that shows the next goal and what it needs.
 - **History** charts species per kingdom, oxygen, CO₂ and temperature, plus a chronicle of events.
-- **Tree** is the phylogeny, coloured by kingdom, with eon boundaries.
 - **World** holds map views, climate and evolution sliders, display options, and new-world generation.
 
 ## The science in the simulation
@@ -106,7 +108,8 @@ src/world.js        planet + ecosystem, abiogenesis, eons, natural events, histo
 src/science.js      the story of life: real-science notes for each transition
 src/names.js        procedural Latin names, styled by group
 src/render.js       Three.js globe, ocean, atmosphere, clouds, life icons, picking, effects
-src/ui.js           panels, charts, tree of life, planet story, inspector, discovery cards
+src/ui.js           panels, charts, planet story, inspector, discovery cards
+src/tree.js         full-screen tree of life (group spindles + species phylogeny)
 src/main.js         bootstrap, tools, input, game loop
 tools/headless.mjs  run the simulation in Node without graphics
 vendor/             three.js r160 + OrbitControls (MIT)

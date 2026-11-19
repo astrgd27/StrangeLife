@@ -1,4 +1,4 @@
-// HTML panels: stats, life list, charts, tree of life, planet story, inspector, cards, toasts.
+// HTML panels: stats, life list, charts, planet story, inspector, cards, toasts.
 
 import { GRADES, KINGDOMS, KINGDOM_KEYS, TROPHIC_NAMES, HABITAT_NAMES, MAXT } from './ecosystem.js';
 import { EONS, formatYears } from './world.js';
@@ -43,7 +43,6 @@ export class UI {
       this.kingdomFilter = this.kingdomFilter === el.dataset.k ? null : el.dataset.k;
       this.renderLife();
     });
-    $('tree').addEventListener('click', (e) => this.treeClick(e));
     $('story').addEventListener('pointerdown', (e) => {
       const el = e.target.closest('[data-story]');
       if (el) this.openCard(storyByKey[el.dataset.story], true);
@@ -83,7 +82,7 @@ export class UI {
     this.r.highlight = sp;
     this.r.updateIcons();
     this.r.updateColors();
-    this.timers.list = this.timers.tree = this.timers.insp = 0;
+    this.timers.list = this.timers.insp = 0;
     if (this.tab === 'life') this.renderLife();
   }
 
@@ -179,7 +178,6 @@ export class UI {
     }
     if (this.tab === 'life' && due('list', 800)) this.renderLife();
     if (this.tab === 'history' && due('charts', 1000)) { this.drawDiversityChart(); this.drawAtmoChart(); }
-    if (this.tab === 'tree' && due('tree', 1500)) this.drawTree();
     if (this.tab === 'planet' && due('planet', 500)) this.renderPlanet();
     if (this.inspectCell >= 0 && due('insp', 500)) this.renderInspector();
   }
@@ -294,93 +292,6 @@ export class UI {
     ctx.fillText(`${tmax}°`, w - pad.r + 4, pad.t + 8);
     ctx.fillText(`${tmin}°`, w - pad.r + 4, h - pad.b);
     timeAxis(ctx, w, h, pad, H);
-  }
-
-  // ---------- tree of life ----------
-
-  drawTree() {
-    const W = this.world, E = W.eco, now = W.tick;
-    const all = [...E.species.values()];
-    // living species, every ancestor that links them to the root, and big extinct groups
-    const keep = new Set();
-    for (const s of all) {
-      if (s.died >= 0 && s.peakRange < 250) continue;
-      for (let q = s; q && !keep.has(q.id); q = E.species.get(q.parent)) keep.add(q.id);
-    }
-    const shown = all.filter((s) => keep.has(s.id));
-    const shownSet = keep;
-    const parentOf = (s) => { let p = s.parent; while (p && !shownSet.has(p)) p = E.species.get(p)?.parent || 0; return p; };
-    const kids = new Map(), roots = [];
-    for (const s of shown) {
-      s._p = parentOf(s);
-      if (!s._p) roots.push(s); else { if (!kids.has(s._p)) kids.set(s._p, []); kids.get(s._p).push(s); }
-    }
-    const rows = [];
-    const walk = (s) => { rows.push(s); for (const c of (kids.get(s.id) || []).sort((a, b) => a.born - b.born)) walk(c); };
-    roots.sort((a, b) => a.born - b.born).forEach(walk);
-
-    const cv = $('tree'), wrap = cv.parentElement;
-    const rowH = rows.length > 160 ? 6 : rows.length > 70 ? 10 : 15;
-    const w = wrap.clientWidth, h = Math.max(140, rows.length * rowH + 34);
-    cv.style.width = w + 'px'; cv.style.height = h + 'px';
-    const { ctx } = this.prepCanvas(cv);
-    const pad = { l: 8, r: 8, t: 10, b: 24 };
-    const t0 = rows.length ? Math.min(...rows.map((s) => s.born)) : 0;
-    const X = (t) => pad.l + ((t - t0) / Math.max(1, now - t0)) * (w - pad.l - pad.r);
-    // eon boundaries
-    ctx.font = '9px ' + css('--font-mono');
-    const eonTicks = (W.eonTicks || []);
-    let lastEonX = -999;
-    eonTicks.forEach(({ tick, eon }) => {
-      if (tick < t0) return;
-      const x = X(tick);
-      if (x - lastEonX < 60) return;
-      lastEonX = x;
-      ctx.strokeStyle = 'rgba(146,176,222,0.18)'; ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, h - pad.b); ctx.stroke();
-      ctx.fillStyle = css('--ink-dim'); ctx.fillText(EONS[eon].name, x + 3, h - pad.b + 11);
-    });
-    const rowY = new Map();
-    rows.forEach((s, i) => rowY.set(s.id, pad.t + i * rowH + rowH / 2));
-    this.treeRows = rows.map((s) => ({ id: s.id, y: rowY.get(s.id) }));
-    this.treeRowH = rowH;
-    const hl = this.r.highlight;
-    let lastLabel = -99;
-    for (const s of rows) {
-      const y = rowY.get(s.id), alive = s.died < 0;
-      const dim = hl && hl !== s;
-      const col = KINGDOMS[s.kingdom].color;
-      const x0 = X(s.born), x1 = X(alive ? now : s.died);
-      ctx.globalAlpha = dim ? 0.18 : 1;
-      if (s._p) {
-        ctx.strokeStyle = col; ctx.globalAlpha *= 0.35; ctx.lineWidth = 0.75;
-        ctx.beginPath(); ctx.moveTo(x0, rowY.get(s._p)); ctx.lineTo(x0, y); ctx.stroke();
-        ctx.globalAlpha = dim ? 0.18 : 1;
-      }
-      ctx.strokeStyle = col; ctx.globalAlpha *= alive ? 1 : 0.5;
-      ctx.lineWidth = alive ? Math.min(rowH - 2, 1.5 + Math.sqrt(s.range) * 0.18) : 1.2;
-      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(Math.max(x0 + 1.5, x1), y); ctx.stroke();
-      if (rowH >= 10 && alive && y - lastLabel >= 11) {
-        lastLabel = y;
-        ctx.globalAlpha = dim ? 0.3 : 1;
-        ctx.font = `${rowH >= 15 ? 11 : 9}px ${css('--font-body')}`;
-        ctx.fillStyle = css('--ink');
-        const label = `${s.icon} ${s.name}`;
-        const tw = ctx.measureText(label).width;
-        ctx.fillText(label, Math.min(Math.max(x0 + 3, pad.l), w - pad.r - tw), y - 3);
-      }
-      ctx.globalAlpha = 1;
-    }
-    ctx.fillStyle = css('--ink-dim'); ctx.font = '10px ' + css('--font-mono');
-    ctx.textAlign = 'right'; ctx.fillText(formatYears(W.years), w - pad.r, h - 3); ctx.textAlign = 'left';
-  }
-
-  treeClick(e) {
-    if (!this.treeRows) return;
-    const y = e.clientY - $('tree').getBoundingClientRect().top;
-    const row = this.treeRows.find((r) => Math.abs(r.y - y) <= this.treeRowH / 2);
-    if (!row) return;
-    const sp = this.world.eco.species.get(row.id);
-    if (sp && sp.died < 0) this.setHighlight(this.r.highlight === sp ? null : sp);
   }
 
   // ---------- planet tab ----------
