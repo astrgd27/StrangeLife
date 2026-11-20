@@ -154,7 +154,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 ## Ideas for later
 
-See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled.
+See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled, and [IDEAS.md](IDEAS.md) for what's next, including the plan to go deeper than SimEarth.
 
 - Methane and an Archean organic haze
 - Civilization once intelligence appears (SimEarth's tech ages)
