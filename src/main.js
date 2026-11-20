@@ -10,6 +10,8 @@ import { FoodWebView } from './foodweb.js';
 import { GRADES, GRADE_KEYS, MAXT, previewSpecies } from './ecosystem.js';
 import { drawOrganism } from './sprites.js';
 import { SLOTS, listSaves, saveToSlot, loadFromSlot, exportWorld, importWorld, describeSave } from './storage.js';
+import { GameMenu, applySavedOptions } from './menu.js';
+import { ZooView, snapshot, addToZoo } from './zoo.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -280,6 +282,10 @@ function finishStroke() {
 
 window.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea')) return;
+  // menus and the zoo take over the keyboard
+  if (!$('intro').hidden && (e.key === 'Escape' || e.key === 'h' || e.key === 'H')) { $('intro').hidden = true; return; }
+  if (zoo.isOpen) { if (e.key === 'Escape') { if (!$('zoo-profile').hidden) $('zoo-profile').hidden = true; else zoo.close(); } return; }
+  if (menu.isOpen) { if (e.key === 'Escape' && menu.inGame) menu.hide(); return; }
   const t = TOOLS.find((x) => x.key === e.key);
   if (t) setTool(t.id);
   else if (e.key === ' ') { e.preventDefault(); if (speed) { lastSpeed = speed; setSpeed(0); } else setSpeed(lastSpeed || 2); }
@@ -291,7 +297,11 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 't' || e.key === 'T') tree.toggle();
   else if ((e.key === 'z' || e.key === 'Z') && (ui.inspectCell >= 0 || hoverCell >= 0)) openZone(world.eco.zoneOf[ui.inspectCell >= 0 ? ui.inspectCell : hoverCell]);
   else if (e.key === 'Escape' && tree.isOpen) tree.toggle(false);
-  else if (e.key === 'Escape') { setTool('inspect'); $('intro').hidden = true; if (renderer.highlight) ui.setHighlight(null); }
+  else if (e.key === 'Escape') {
+    // Esc clears a selection first; with nothing selected it opens the menu
+    if (tool !== 'inspect' || renderer.highlight || ui.inspectCell >= 0) { setTool('inspect'); if (renderer.highlight) ui.setHighlight(null); if (ui.inspectCell >= 0) { ui.inspectCell = -1; $('inspector').hidden = true; } }
+    else menu.show('pause');
+  }
   else if (e.key === 'h' || e.key === 'H') $('intro').hidden = !$('intro').hidden;
 });
 
@@ -399,7 +409,7 @@ $('import-file').addEventListener('change', async (e) => {
 });
 let lastAutosave = performance.now();
 setInterval(async () => {
-  if (!$('autosave').checked || speed === 0 || performance.now() - lastAutosave < 120000) return;
+  if (!$('autosave').checked || speed === 0 || !menu.inGame || menu.isOpen || performance.now() - lastAutosave < 120000) return;
   lastAutosave = performance.now();
   try { await saveToSlot(world, 'auto'); refreshSaves(); } catch { /* storage unavailable */ }
 }, 10000);
@@ -408,6 +418,51 @@ refreshSaves();
 $('btn-help').addEventListener('click', () => ($('intro').hidden = false));
 $('btn-start').addEventListener('click', () => ($('intro').hidden = true));
 $('intro').addEventListener('click', (e) => { if (e.target.id === 'intro') $('intro').hidden = true; });
+
+// ---------- main menu, runs and the zoo ----------
+
+const zoo = new ZooView({ onClose: () => { if (!menu.inGame) menu.show('title'); } });
+function startPlaying() {
+  menu.inGame = true;
+  menu.hide();
+  if (speed === 0) setSpeed(2);
+  // first visit: show how to play once
+  let seen = false;
+  try { seen = localStorage.getItem('strangelife-seen-intro') === '1'; localStorage.setItem('strangelife-seen-intro', '1'); } catch { /* storage blocked */ }
+  if (!seen) $('intro').hidden = false;
+}
+const menu = new GameMenu({
+  newGame: (sc, s) => { newWorld(s, sc); startPlaying(); },
+  load: async (slot) => { const w = await loadFromSlot(slot); adoptWorld(w, `Loaded a saved world (${slot === 'auto' ? 'autosave' : 'slot ' + slot}).`); startPlaying(); },
+  save: async (slot) => { await saveToSlot(world, slot); refreshSaves(); },
+  importFile: () => { pendingImportPlay = true; $('import-file').click(); },
+  zoo: () => zoo.open(),
+  howto: () => ($('intro').hidden = false),
+  resume: () => menu.hide(),
+  quit: async () => {
+    if ($('autosave').checked) { try { await saveToSlot(world, 'auto'); } catch { /* storage unavailable */ } }
+    menu.inGame = false;
+    menu.show('title');
+  },
+  // the species you can take home: the most complex and widespread first
+  candidates: () => world.eco.livingSpecies().filter((sp) => sp.range > 0)
+    .sort((a, b) => (GRADES[b.grade].tier - GRADES[a.grade].tier) || (b.range - a.range)).slice(0, 60),
+  endRun: (ids) => {
+    const E = world.eco;
+    const snaps = ids.map((id) => E.species.get(id)).filter(Boolean).map((sp) => snapshot(world, sp));
+    menu.inGame = false;
+    menu.hide();
+    if (snaps.length) {
+      if (!addToZoo(snaps)) ui.toast("Couldn't save to the zoo: this browser is blocking storage.", 'bad');
+      zoo.open(snaps.map((s) => s.id));
+    } else menu.show('title');
+  },
+});
+let pendingImportPlay = false;
+$('import-file').addEventListener('change', () => { if (pendingImportPlay) { pendingImportPlay = false; setTimeout(() => menu.inGame || startPlaying(), 400); } });
+$('btn-menu').addEventListener('click', () => menu.show('pause'));
+applySavedOptions();
+menu.show('title');
 
 // ---------- loop ----------
 
@@ -422,6 +477,9 @@ function frame(now) {
   last = now;
   // up close in a zone: the planet waits
   if (zone.isOpen) { zone.update(dt, now); ui.update(now); requestAnimationFrame(frame); return; }
+  // in the zoo nothing else needs drawing; behind a menu the planet waits (and slowly turns)
+  if (zoo.isOpen) { requestAnimationFrame(frame); return; }
+  if (menu.isOpen) { renderer.render(dt); requestAnimationFrame(frame); return; }
   acc += dt * SPEEDS[speed];
   const t0 = performance.now();
   const budget = speed >= 4 ? 22 : 14; // ms of simulation per frame
@@ -451,4 +509,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // expose for debugging in the console
-window.strangelife = { get world() { return world; }, renderer, ui, tree, zone, web };
+window.strangelife = { get world() { return world; }, renderer, ui, tree, zone, web, menu, zoo, newWorld };

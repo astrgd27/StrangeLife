@@ -44,6 +44,7 @@
   <div class="top-actions">
     <button id="btn-tree" class="ghost tree-btn" title="Tree of life (T)"><span aria-hidden="true">🌳</span> Tree of life</button>
     <button id="btn-help" class="ghost" title="How to play (H)">?</button>
+    <button id="btn-menu" class="ghost" title="Menu (Esc)" aria-label="Menu">☰</button>
   </div>
 </header>
 
@@ -263,7 +264,7 @@
 
 <ol class="toasts" id="toasts" aria-live="polite"></ol>
 
-<div class="intro" id="intro">
+<div class="intro" id="intro" hidden>
   <div class="intro-card">
     <p class="eyebrow">An evolution sandbox</p>
     <h1>StrangeLife</h1>
@@ -277,11 +278,24 @@
     </ul>
     <p class="muted small">With a terraforming tool selected, left-drag paints and right-drag spins. Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd>, <kbd>-</kbd>, <kbd>=</kbd> tools, <kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> speed, <kbd>T</kbd> tree of life.</p>
     <div class="intro-actions">
-      <button id="btn-start" class="primary big">Begin</button>
+      <button id="btn-start" class="primary big">Got it</button>
       <a class="classic-link" href="classic/">Play StrangeLife Classic: the simpler original</a>
     </div>
   </div>
 </div>
+
+<div class="menu" id="menu">
+  <div class="menu-body" id="menu-body"></div>
+</div>
+
+<section class="zoo" id="zoo" hidden aria-label="Your zoo">
+  <header class="tree-head">
+    <div class="tree-title"><h2>🦒 Your zoo</h2><p class="muted small" id="zoo-count"></p></div>
+    <div class="tree-controls"><button class="primary" id="zoo-close">Done</button></div>
+  </header>
+  <div class="zoo-grid" id="zoo-grid"></div>
+</section>
+<div class="zoo-profile" id="zoo-profile" hidden><article class="zoo-profile-body" id="zoo-profile-body"></article></div>
 
 <script type="module" src="src/main.js"></script>
 </body>
