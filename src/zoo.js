@@ -193,6 +193,7 @@ export class ZooView {
     if (ph.animal && ph.level === 3) {
       life.push(['Young', ph.care > 0.6 ? 'Few, and well looked after' : ph.care < 0.3 ? 'Many, left to chance' : 'A moderate number, with some care']);
       if (ph.metamorphosis > 0.6) life.push(['Growing up', 'The young live differently from the adults (metamorphosis)']);
+      if (ph.migration > 0.6) life.push(['Seasons', 'Migrates to escape the winters']);
       if (ph.sociality > 0.6) life.push(['Social life', ph.skeleton === 'endo' ? 'Lives in groups' : 'Colonies with a queen and workers']);
     }
     if (ph.toxins > 0.6) life.push(['Defences', 'Toxic to most grazers']);

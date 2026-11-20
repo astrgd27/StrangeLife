@@ -214,6 +214,7 @@ export class Ecosystem {
     this.tCoral = new Uint8Array(MAXT); this.tRoots = new Uint8Array(MAXT);
     // plant defences and fire: how palatable each plant is to generalist grazers, how well it
     // tolerates being grazed (grasses regrow from the base) and how much of it survives a fire
+    this.tHardy = new Float32Array(MAXT).fill(1);
     this.tPal = new Float32Array(MAXT).fill(1); this.tGraze = new Float32Array(MAXT).fill(1); this.tFire = new Float32Array(MAXT).fill(1);
     this.zFire = null; // recent fires per zone (made when the environment is first known)
     // the food web: how much each predator prefers each prey (by size), and recent flows of food
@@ -259,6 +260,8 @@ export class Ecosystem {
     this.zMl = new Float32Array(Z); this.zHl = new Float32Array(Z); this.zDs = new Float32Array(Z);
     // fresh water: the share of a zone covered by rivers and lakes, and its plant capacity
     this.zFw = new Float32Array(Z); this.zKf = new Float32Array(Z);
+    this.zSeason = new Float32Array(Z); // how harsh the seasons are
+    this.realm = new Int16Array(Z).fill(-1); this.realms = []; // biogeographic realms, worked out on request
     this.detS = new Float32Array(Z); this.detL = new Float32Array(Z);
     this.coverS = new Float32Array(Z); this.coverL = new Float32Array(Z);
     this.suit = new Float32Array(Z * MAXT);
@@ -276,11 +279,12 @@ export class Ecosystem {
     const sea = new Float32Array(Z), land = new Float32Array(Z), ts = new Float32Array(Z), tl = new Float32Array(Z);
     const ks = new Float32Array(Z), kl = new Float32Array(Z), org = new Float32Array(Z), tAll = new Float32Array(Z);
     const ml = new Float32Array(Z), hl = new Float32Array(Z), ds = new Float32Array(Z), fw = new Float32Array(Z), kf = new Float32Array(Z);
-    const fresh = P.fresh;
+    const fresh = P.fresh, season = new Float32Array(Z);
     const depthScale = 1 / Math.max(0.3, 1 + P.seaLevel);
     for (let c = 0; c < P.n; c++) {
       const z = zoneOf[c], T = P.temp[c], b = P.biome[c];
       tAll[z] += T;
+      season[z] += P.season ? P.season[c] : 0;
       if (P.water[c]) {
         sea[z]++; ts[z] += T; org[z] += P.organics[c];
         ds[z] += Math.min(1, (P.seaLevel - P.elev[c]) * depthScale * 1.6);
@@ -305,6 +309,7 @@ export class Ecosystem {
       this.zHl[z] = land[z] ? hl[z] / land[z] : 0;
       this.zDs[z] = sea[z] ? ds[z] / sea[z] : 0.3;
       this.zFw[z] = fw[z] / n;
+      this.zSeason[z] = season[z] / n;
       this.zKf[z] = kf[z] / n;
     }
     // refresh a rotating share of species each call; climate changes slowly
@@ -413,6 +418,7 @@ export class Ecosystem {
     this.tSucc[s] = p.succ || 0; this.tClimb[s] = p.climb || 0; this.tRock[s] = p.rock ? 1 : 0;
     this.tCoral[s] = p.coral ? 1 : 0; this.tRoots[s] = p.roots ? 1 : 0;
     this.tPal[s] = p.pal ?? 1;
+    this.tHardy[s] = p.hardy ?? 1;
     this.tGraze[s] = sp.grade === 'grass' ? 0.55 : 1;
     // what survives a wildfire: grasses resprout, trees burn, animals mostly flee
     this.tFire[s] = sp.trophic !== 1 ? (ph.animal ? 0.85 : 0.9) : sp.grade === 'grass' ? 0.85 : sp.grade === 'lichen' ? 0.6 : ph.succulence > 0.5 ? 0.35 : ph.size > 0.45 ? 0.25 : 0.4;
@@ -664,7 +670,8 @@ export class Ecosystem {
         const h = tHab[s], hs = h === 0 ? 1 : h === 1 ? 0.5 : 0, hl = 1 - hs;
         const suit = suitArr[base + s];
         const o2f = tO2[s] > 0 ? Math.min(1, o2 / tO2[s]) : 1;
-        let mort = tM[s] + 0.05 * (1 - suit) + 0.08 * (1 - o2f) + 0.1 * hl * (1 - ozone) + tDry[s];
+        // (harsh seasons weigh on everything that can't go dormant, keep warm or leave)
+        let mort = tM[s] + 0.05 * (1 - suit) + 0.08 * (1 - o2f) + 0.1 * hl * (1 - ozone) + tDry[s] + 0.045 * this.zSeason[z] * (1 - this.tHardy[s]);
         // habitat shrinking under them (sea level, ice)
         const room = h === 0 ? zs : h === 2 ? zl : h === 3 ? Math.min(1, 0.2 + 6 * this.zFw[z]) : Math.min(1, 4 * Math.min(zs, zl));
         if (room < 0.03) mort += 0.2;
@@ -1287,7 +1294,7 @@ export class Ecosystem {
     // firsts in the web of life
     if (sp.trophic === TROPHIC.PARASITE && !this.innovations.has('parasites')) { this.innovations.add('parasites'); this.onEvent({ type: 'firstof', key: 'parasites', species: sp }); }
     if (sp.ph?.partner === 'algae' && !this.innovations.has('corals')) { this.innovations.add('corals'); this.onEvent({ type: 'firstof', key: 'corals', species: sp }); }
-    for (const [key, ok] of [['toxins', sp.ph?.toxins > 0.6], ['care', sp.ph?.care > 0.6 && sp.ph?.animal], ['metamorphosis', sp.ph?.metamorphosis > 0.6]]) {
+    for (const [key, ok] of [['toxins', sp.ph?.toxins > 0.6], ['care', sp.ph?.care > 0.6 && sp.ph?.animal], ['metamorphosis', sp.ph?.metamorphosis > 0.6], ['migration', sp.ph?.migration > 0.6]]) {
       if (ok && !this.innovations.has(key)) { this.innovations.add(key); this.onEvent({ type: 'firstof', key, species: sp }); }
     }
     if (sp.ph?.partner === 'gut' && !this.innovations.has('gut')) { this.innovations.add('gut'); this.onEvent({ type: 'firstof', key: 'gut', species: sp }); }
@@ -1439,6 +1446,61 @@ export class Ecosystem {
       if (best && ratio > 1.5) this.onEvent({ type: 'cascade', species: c.pred, prey: best, ratio });
       return false;
     });
+  }
+
+  // Biogeographic realms: group zones by which species they share (k-means on species lists),
+  // separately for land and sea. Continents long apart grow their own faunas, so the realms show
+  // where drifting plates have isolated life (like Wallace's Line between Asia and Australia).
+  computeRealms(K = 7) {
+    const Z = this.Z, B = this.B, rng = this.rng;
+    this.realm.fill(-1);
+    this.realms = [];
+    for (const marine of [false, true]) {
+      const zones = [], lists = [];
+      for (let z = 0; z < Z; z++) {
+        if (marine ? this.zSea[z] < 0.5 : this.zLand[z] < 0.2) continue;
+        const list = [];
+        for (let a = 0; a < this.presN[z]; a++) {
+          const s = this.pres[z * MAXT + a], sp = this.slots[s];
+          if (!sp || B[z * MAXT + s] < 1e-4 || sp.ph?.level < 2) continue; // complex life tells realms apart
+          if (marine ? sp.habitat !== 0 : sp.habitat === 0) continue;
+          list.push(s);
+        }
+        if (list.length >= 2) { zones.push(z); lists.push(list); }
+      }
+      if (zones.length < K * 3) continue;
+      const k = marine ? Math.max(3, K - 2) : K;
+      const sim = (list, c) => { let d = 0; for (const s of list) d += c[s]; return d / Math.sqrt(list.length); };
+      // seeds spread apart: each next seed is the zone least like those already chosen
+      const cents = [];
+      const asCent = (list) => { const c = new Float32Array(MAXT); for (const s of list) c[s] = 1 / Math.sqrt(list.length); return c; };
+      cents.push(asCent(lists[Math.floor(rng() * lists.length)]));
+      while (cents.length < k) {
+        let worst = 0, wv = Infinity;
+        for (let i = 0; i < lists.length; i++) { let best = 0; for (const c of cents) best = Math.max(best, sim(lists[i], c)); if (best < wv) { wv = best; worst = i; } }
+        cents.push(asCent(lists[worst]));
+      }
+      const lab = new Int16Array(zones.length);
+      for (let it = 0; it < 8; it++) {
+        for (let i = 0; i < lists.length; i++) { let bi = 0, bv = -1; cents.forEach((c, j) => { const v = sim(lists[i], c); if (v > bv) { bv = v; bi = j; } }); lab[i] = bi; }
+        const sums = cents.map(() => new Float32Array(MAXT)), cnt = new Int32Array(k);
+        for (let i = 0; i < lists.length; i++) { cnt[lab[i]]++; for (const s of lists[i]) sums[lab[i]][s] += 1; }
+        for (let j = 0; j < k; j++) { let nrm = 0; for (let s = 0; s < MAXT; s++) nrm += sums[j][s] ** 2; nrm = Math.sqrt(nrm) || 1; for (let s = 0; s < MAXT; s++) cents[j][s] = sums[j][s] / nrm; }
+      }
+      // name each realm after its most characteristic species: common there, rare elsewhere
+      const base = this.realms.length;
+      for (let j = 0; j < k; j++) {
+        const inR = new Float32Array(MAXT), outR = new Float32Array(MAXT);
+        let nIn = 0, nOut = 0;
+        for (let i = 0; i < lists.length; i++) { const t = lab[i] === j ? inR : outR; if (lab[i] === j) nIn++; else nOut++; for (const s of lists[i]) t[s]++; }
+        let best = -1, bv = -Infinity;
+        for (let s = 0; s < MAXT; s++) { if (!inR[s]) continue; const v = inR[s] / Math.max(1, nIn) - outR[s] / Math.max(1, nOut); if (v > bv) { bv = v; best = s; } }
+        this.realms.push({ marine, zones: nIn, sig: best >= 0 ? this.slots[best] : null });
+      }
+      zones.forEach((z, i) => { this.realm[z] = base + lab[i]; });
+    }
+    this.realmsTick = this.tick;
+    return this.realms;
   }
 
   // The food web of one zone, for the food-web view: who lives here and who eats whom.

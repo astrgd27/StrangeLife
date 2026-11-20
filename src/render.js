@@ -402,6 +402,34 @@ export class Renderer {
         const v = zf ? Math.min(1, zf[E.zoneOf[c]] / 3) : 0, w = P.water[c] ? 0.4 : 1;
         out[c * 3] = (0.12 + 0.88 * v) * w; out[c * 3 + 1] = (0.1 + 0.45 * v * v) * w; out[c * 3 + 2] = (0.12 + 0.05 * v) * w;
       }
+    } else if (this.overlay === 'currents') {
+      // cold currents and upwelling (cyan) off west coasts, warm currents (red) off east coasts
+      for (let c = 0; c < P.n; c++) {
+        let r = 0.3, g = 0.3, b = 0.3;
+        if (P.water[c]) {
+          const u = P.upwell[c];
+          r = 0.05 + 0.1 * u; g = 0.12 + 0.7 * u; b = 0.3 + 0.55 * u;
+          if (P.current[c] > 0) { r = 0.75; g = 0.25; b = 0.2; }
+        }
+        out[c * 3] = r; out[c * 3 + 1] = g; out[c * 3 + 2] = b;
+      }
+    } else if (this.overlay === 'seasons') {
+      // mild all year (green) to harsh winters and hot summers (white-violet)
+      for (let c = 0; c < P.n; c++) {
+        const v = Math.min(1, P.season[c] * 1.4), w = P.water[c] ? 0.55 : 1;
+        out[c * 3] = (0.15 + 0.75 * v) * w; out[c * 3 + 1] = (0.55 - 0.15 * v) * w; out[c * 3 + 2] = (0.25 + 0.7 * v) * w;
+      }
+    } else if (this.overlay === 'realms') {
+      // each biogeographic realm in its own colour; boundaries dark
+      if (!E.realms.length || W.tick - (E.realmsTick ?? -1e9) > 300) E.computeRealms();
+      const nb = P.grid;
+      for (let c = 0; c < P.n; c++) {
+        const z = E.zoneOf[c], k = E.realm[z];
+        let [r, g, b] = k < 0 ? [0.12, 0.12, 0.14] : hsl((k * 0.17 + (E.realms[k]?.marine ? 0.5 : 0)) % 1, E.realms[k]?.marine ? 0.35 : 0.55, E.realms[k]?.marine ? 0.3 : 0.5);
+        for (let j = nb.nbrStart[c]; j < nb.nbrStart[c + 1]; j++) { const q = E.realm[E.zoneOf[nb.nbr[j]]]; if (q !== k && q >= 0 && k >= 0 && E.realms[q]?.marine === E.realms[k]?.marine) { r *= 0.35; g *= 0.35; b *= 0.35; break; } }
+        if (P.water[c] && !(E.realms[k]?.marine)) { r *= 0.5; g *= 0.5; b *= 0.5; }
+        out[c * 3] = r; out[c * 3 + 1] = g; out[c * 3 + 2] = b;
+      }
     } else if (this.overlay === 'diversity') {
       // number of species per zone
       for (let c = 0; c < P.n; c++) {

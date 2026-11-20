@@ -120,6 +120,12 @@ export class Planet {
     this.water = new Uint8Array(n);
     // rivers and lakes: water running downhill (flow), and the share of each cell that is fresh water
     this.flow = new Float32Array(n);
+    // ocean currents and seasons: upwelling (cold, nutrient-rich water), and how strong the seasons
+    // are (from the axial tilt, the latitude and how far from the sea)
+    this.upwell = new Float32Array(n);
+    this.current = new Int8Array(n);   // +1 warm current, -1 cold current
+    this.season = new Float32Array(n);
+    this.tilt = 23.5;
     this.fresh = new Float32Array(n);
     this.lake = new Uint8Array(n);
     this.oceanDist = new Uint16Array(n);    // land cells: steps to the sea
@@ -326,6 +332,67 @@ export class Planet {
       m -= Math.max(0, this.heightAboveSea(i) - 0.45) * 0.4;
       this.baseM[i] = m;
     }
+    this.computeWindsAndCurrents();
+  }
+
+  // Prevailing winds by latitude: trade winds blow from the east in the tropics, westerlies from
+  // the west at mid-latitudes, polar easterlies near the poles. They push ocean currents along the
+  // coasts and carry rain, so:
+  //   - west coasts in the subtropics get cold currents and upwelling: rich seas, cool foggy deserts
+  //     on the shore (Peru and the Atacama, Namibia and the Namib)
+  //   - east coasts get warm currents (the Gulf Stream, the Kuroshio)
+  //   - mountains wring the rain out of the wind, leaving a dry rain shadow behind them
+  //   - seasons are strongest far from the sea at high latitudes, and scale with the axial tilt
+  computeWindsAndCurrents() {
+    const n = this.n, pos = this.grid.pos, { nbrStart, nbr } = this.grid, water = this.water;
+    const up = this.upwell, cur = this.current, seas = this.season;
+    // walk k steps from cell c roughly east (dir=+1) or west (dir=-1); visit(cell) returns true to stop
+    const walk = (c, dir, k, visit) => {
+      for (let s = 0; s < k; s++) {
+        const x = pos[c * 3], z = pos[c * 3 + 2];
+        const ex = z * dir, ez = -x * dir; // east = (0,1,0) × position
+        let best = -1, bd = -Infinity;
+        for (let j = nbrStart[c]; j < nbrStart[c + 1]; j++) {
+          const q = nbr[j], d = (pos[q * 3] - x) * ex + (pos[q * 3 + 2] - z) * ez;
+          if (d > bd) { bd = d; best = q; }
+        }
+        if (best < 0 || bd <= 0) return;
+        c = best;
+        if (visit(c, s)) return;
+      }
+    };
+    const tiltF = this.tilt / 23.5;
+    for (let i = 0; i < n; i++) {
+      up[i] = 0; cur[i] = 0;
+      const y = pos[i * 3 + 1], alat = Math.abs(Math.asin(y) * 180 / Math.PI);
+      seas[i] = Math.min(1, tiltF * Math.sin((alat * Math.PI) / 180) * (water[i] ? 0.35 : 0.6 + 0.04 * Math.min(10, this.oceanDist[i])));
+      if (!water[i]) continue;
+      if (this.landDist[i] <= 3 && alat > 6 && alat < 50) {
+        let landEast = false, landWest = false;
+        walk(i, 1, 4, (q) => (landEast = !water[q]));
+        walk(i, -1, 4, (q) => (landWest = !water[q]));
+        const f = Math.exp(-(((alat - 24) / 13) ** 2));
+        if (landEast && !landWest) { up[i] = f; cur[i] = -1; this.baseT[i] -= 4 * f; }
+        else if (landWest && !landEast) { cur[i] = 1; this.baseT[i] += 2.5 * f; }
+      } else if (alat < 5 && this.landDist[i] > 3) up[i] = 0.45; // equatorial upwelling
+    }
+    // coasts beside cold currents are foggy deserts; inland, mountains cast rain shadows
+    for (let i = 0; i < n; i++) {
+      if (water[i]) continue;
+      if (this.oceanDist[i] <= 2) {
+        let u = 0;
+        for (let j = nbrStart[i]; j < nbrStart[i + 1]; j++) u = Math.max(u, up[nbr[j]]);
+        this.baseM[i] -= 0.28 * u;
+        if (u) this.baseT[i] -= 2 * u;
+      }
+      const y = pos[i * 3 + 1], alat = Math.abs(Math.asin(y) * 180 / Math.PI);
+      const from = alat < 30 || alat > 62 ? 1 : -1; // the wind comes from the east, or from the west
+      const h0 = this.heightAboveSea(i);
+      let peak = 0;
+      walk(i, from, 7, (q) => { if (water[q]) return true; peak = Math.max(peak, this.heightAboveSea(q)); return false; });
+      const shadow = Math.max(0, peak - h0 - 0.08);
+      this.baseM[i] -= Math.min(0.45, 1.3 * shadow);
+    }
   }
 
   // Global temperature shift from the atmosphere and the Sun.
@@ -369,7 +436,7 @@ export class Planet {
       let K = BIOMES[b].K;
       if (this.water[i]) {
         ocean++;
-        if (b !== B.SEA_ICE && b !== B.SCALDING) K *= 0.75 + 0.25 * Math.exp(-(((T - 18) / 14) ** 2)) + (T < 8 ? 0.15 : 0);
+        if (b !== B.SEA_ICE && b !== B.SCALDING) K *= (0.75 + 0.25 * Math.exp(-(((T - 18) / 14) ** 2)) + (T < 8 ? 0.15 : 0)) * (1 + 0.9 * this.upwell[i]);
         if (b === B.SEA_ICE) ice++;
       } else {
         if (b === B.ICE) ice++; else { land++; Kland += K; plantLand += this.plant[i]; }

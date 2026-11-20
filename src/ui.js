@@ -185,6 +185,7 @@ export class UI {
         toxins: () => `${sp.icon} ${sp.name} defends itself with toxins; only specialists can eat it now.`,
         care: () => `${sp.icon} ${sp.name} raises few young and looks after them: parental care.`,
         metamorphosis: () => `${sp.icon} The young of ${sp.name} live a different life from the adults: metamorphosis.`,
+        migration: () => `${sp.icon} ${sp.name} migrates with the seasons, escaping the winters.`,
         fire: () => '🔥 Wildfires sweep the dry lands: with enough oxygen in the air, plants burn.',
       }[e.key]?.();
       if (txt) this.chronicle(e.tick, txt);
@@ -486,6 +487,8 @@ export class UI {
         <dt>Temperature</dt><dd>${d.temp.toFixed(1)}°C</dd>
         <dt>Rainfall</dt><dd>${Math.round(d.moist * 100)}%</dd>
         <dt>${d.water ? 'Depth' : 'Altitude'}</dt><dd>${height}</dd>
+        ${W.eco.realm[d.zone] >= 0 && W.eco.realms[W.eco.realm[d.zone]]?.sig ? `<dt>Realm</dt><dd>${W.eco.realms[W.eco.realm[d.zone]].marine ? 'Sea' : 'Land'} realm of <i>${esc(W.eco.realms[W.eco.realm[d.zone]].sig.name)}</i></dd>` : ''}
+        ${P.season[c] > 0.45 && !d.water ? '<dt>Seasons</dt><dd>harsh winters</dd>' : ''}${P.upwell[c] > 0.3 ? '<dt>Ocean</dt><dd>cold upwelling: rich in nutrients</dd>' : P.current[c] > 0 ? '<dt>Ocean</dt><dd>warm current</dd>' : ''}
         ${d.water ? `<dt>Organics</dt><dd>${d.organics.toFixed(2)}${d.volc > 0.3 ? ' · hydrothermal vents' : ''}</dd>` : d.volc > 0.4 ? '<dt>Geology</dt><dd>volcanic</dd>' : ''}
       </dl>
       <hr><div class="sub">${d.life.length ? `Life in this zone (${d.life.length} species)` : 'No life in this zone yet.'}</div>
@@ -626,6 +629,7 @@ function lifeText(sp) {
     const c = ph.care;
     rows.push(['Young', c > 0.6 ? 'Few, and well looked after' : c < 0.3 ? 'Many, left to chance' : 'A moderate number, with some care']);
     if (ph.metamorphosis > 0.6) rows.push(['Growing up', ph.skeleton === 'endo' ? 'Tadpoles live in water before changing into adults' : 'Larvae live and eat differently from the adults']);
+    if (ph.migration > 0.6) rows.push(['Seasons', 'Migrates to escape the winters']);
     if (ph.sociality > 0.6) rows.push(['Social life', ph.skeleton === 'endo' ? (sp.trophic === 4 ? 'Hunts in packs' : 'Lives in herds, safer from predators') : 'Colonies with a queen and workers']);
   }
   return rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');

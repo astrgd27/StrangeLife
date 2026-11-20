@@ -566,3 +566,6 @@ body.at-title .topbar, body.at-title .tools, body.at-title .panel, body.at-title
 
 .pen-btns button:not(.primary), .prof-head button { background: rgba(255, 255, 255, 0.06); color: var(--ink); border: 1px solid var(--line); }
 .pen-btns button:not(.primary):hover, .prof-head button:hover { background: rgba(255, 255, 255, 0.12); }
+
+.overlay-legend { margin: 6px 0 0; line-height: 1.6; }
+.realm-chip { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c); margin-right: 6px; vertical-align: middle; }

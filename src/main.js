@@ -323,11 +323,28 @@ const refreshSea = bindRange('sea-level', 'out-sea', seaFmt, (v) => {
 const refreshMut = bindRange('mutation', 'out-mut', (v) => `${v.toFixed(1)}×`, (v) => { world.eco.mutationRate = v; });
 const refreshTrans = bindRange('transitions', 'out-trans', (v) => `${v.toFixed(1)}×`, (v) => { world.eco.transitionRate = v; });
 const refreshDrift = bindRange('drift', 'out-drift', (v) => (v === 0 ? 'off' : `${v.toFixed(1)}×`), (v) => { world.tect.speed = v; });
+const refreshTilt = bindRange('tilt', 'out-tilt', (v) => `${v}°`, (v) => {
+  world.planet.tilt = v; world.planet.computeBase(); world.planet.updateClimate(); world.eco.updateEnvironment(); renderer.updateColors();
+});
 
+const LEGENDS = {
+  currents: 'Cyan: cold currents and upwelling, rich in nutrients (off west coasts in the subtropics, and at the equator). Red: warm currents (off east coasts).',
+  seasons: 'Green: mild all year. Violet: harsh seasons, strongest far from the sea and far from the equator, and stronger with more axial tilt.',
+  fire: 'Where wildfires have burned recently.',
+};
+function overlayLegend() {
+  const o = renderer.overlay, el = $('overlay-legend');
+  if (o === 'realms') {
+    const R = world.eco.realms;
+    el.innerHTML = R.length ? `Realms: regions whose life is its own, named after a characteristic species.<br>${R.map((r, k) => `<span class="realm-chip" style="--c:hsl(${Math.round(((k * 0.17 + (r.marine ? 0.5 : 0)) % 1) * 360)},${r.marine ? 35 : 55}%,${r.marine ? 35 : 50}%)"></span>${r.marine ? 'Sea' : 'Land'}: ${r.sig ? `${r.sig.icon} <i>${r.sig.name}</i>` : '?'}`).join('<br>')}` : 'Not enough complex life yet to tell realms apart.';
+  } else el.textContent = LEGENDS[o] || '';
+}
 document.querySelectorAll('#overlay-seg button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('#overlay-seg button').forEach((x) => x.classList.toggle('active', x === b));
   renderer.overlay = b.dataset.overlay;
+  if (renderer.overlay === 'realms') world.eco.computeRealms();
   renderer.updateColors();
+  overlayLegend();
 }));
 $('show-icons').addEventListener('change', (e) => { renderer.showIcons = e.target.checked; renderer.updateIcons(); });
 $('show-bodies').addEventListener('change', (e) => { renderer.showBodies = e.target.checked; renderer.updateIcons(); });
@@ -353,6 +370,7 @@ function newWorld(s, sc) {
   tree.setWorld(world);
   $('greenhouse').value = 0;
   $('sea-level').value = world.planet.seaLevel;
+  $('tilt').value = world.planet.tilt; refreshTilt();
   refreshGreenhouse(); refreshSea(); refreshMut(); refreshTrans(); refreshDrift();
   ui.toast(`A new world forms (seed ${seed}).`, 'star');
   try { history.replaceState(null, '', `?seed=${seed}&start=${scenario}`); } catch { /* sandboxed */ }
@@ -382,6 +400,7 @@ function adoptWorld(w, msg) {
   $('mutation').value = world.eco.mutationRate; $('transitions').value = world.eco.transitionRate;
   $('drift').value = world.tect.speed; $('greenhouse').value = world.planet.globalTemp; $('sea-level').value = world.planet.seaLevel;
   $('ice-cycles').checked = world.planet.cycles !== false;
+  $('tilt').value = world.planet.tilt ?? 23.5; refreshTilt();
   refreshGreenhouse(); refreshSea(); refreshMut(); refreshTrans(); refreshDrift();
   lastSea = world.planet.seaLevel; lastTerrain = world.planet.terrainVersion;
   ui.chronicle(world.tick, msg);

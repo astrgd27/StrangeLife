@@ -11,7 +11,7 @@ export const GENES = [
   'adhesion', 'differentiation', 'photo', 'ingest', 'absorb', 'carnivory', 'motility', 'size',
   'symmetry', 'segments', 'limbs', 'skeleton', 'vascular', 'landAdapt', 'endothermy', 'brain',
   'wings', 'display', 'hue', 'covering', 'armour', 'succulence', 'climbing', 'parasitism', 'symbiosis',
-  'toxins', 'care', 'metamorphosis', 'sociality',
+  'toxins', 'care', 'metamorphosis', 'sociality', 'migration',
 ];
 export const NG = GENES.length;
 export const GI = Object.fromEntries(GENES.map((g, i) => [g, i]));
@@ -46,6 +46,7 @@ export const GENE_INFO = {
   care: 'Few young, well looked after (high), or many young left to chance (low)',
   metamorphosis: 'Young (larvae, tadpoles) live a different life from the adults',
   sociality: 'Lives in colonies with workers and queens (insects), or in herds and packs',
+  migration: 'Travels with the seasons to escape winters and follow food',
 };
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -57,7 +58,7 @@ export function makeGenes(obj = {}) {
   if (obj.covering === undefined) g[GI.covering] = 0.32; // bare skin: the ground state
   for (const k of ['armour', 'succulence', 'climbing', 'parasitism', 'symbiosis']) if (obj[k] === undefined) g[GI[k]] = 0.05;
   // life-history genes start part-way, so one big change can tip a lineage over
-  for (const [k, v] of [['toxins', 0.15], ['care', 0.2], ['metamorphosis', 0.2], ['sociality', 0.2]]) if (obj[k] === undefined) g[GI[k]] = v;
+  for (const [k, v] of [['toxins', 0.15], ['care', 0.2], ['metamorphosis', 0.2], ['sociality', 0.2], ['migration', 0.15]]) if (obj[k] === undefined) g[GI[k]] = v;
   if (obj.hue === undefined) g[GI.hue] = 0.5;
   return g;
 }
@@ -122,6 +123,7 @@ export function develop(sp) {
     care: animal && level === 3 ? G('care') : 0,
     metamorphosis: animal && level === 3 && (skeleton === 'exo' || covering === 'skin' || skeleton === 'none') ? G('metamorphosis') : 0,
     sociality: animal && level === 3 ? G('sociality') : 0,
+    migration: animal && level === 3 && G('motility') > 0.45 ? G('migration') : 0,
     landAdapt: G('landAdapt'), display: G('display'), differentiation: G('differentiation'), motility: G('motility'),
     tier: !euk ? 0 : level <= 1 ? 1 : level === 2 ? 2 : sapient ? 6 : 3 + (skeleton === 'endo' ? 1 : 0) + (endo || vascular > 0.65 ? 1 : 0),
   };
@@ -227,6 +229,7 @@ export function describe(ph) {
     if (ph.metamorphosis > 0.6) parts.push('metamorphosis');
     if (ph.care > 0.6) parts.push('cares for its young');
     if (ph.sociality > 0.6) parts.push(ph.skeleton === 'endo' ? 'lives in groups' : 'lives in colonies');
+    if (ph.migration > 0.6) parts.push('migrates');
     if (ph.flying) parts.push('flying');
     if (ph.endo) parts.push('warm-blooded');
     if (ph.brain > 0.6) parts.push(ph.brain > 0.85 ? 'large brain' : 'brain');
@@ -334,6 +337,11 @@ export function ecology(sp, ph) {
     if (ph.shelled) p.vuln *= 0.6;
     if (p.socialDefence) p.vuln /= 1 + p.socialDefence;
   }
+  // Winters: how well it rides out a harsh season. Microbes and plants go dormant, cold-blooded
+  // animals go torpid, fur and feathers keep warm-blooded animals going, and migrants just leave.
+  p.hardy = !ph.euk ? 0.8 : ph.plant || ph.fungus || ph.lichen ? 0.6 : ph.level <= 1 ? 0.7
+    : ph.endo ? (ph.covering === 'fur' || ph.covering === 'feathers' ? 0.55 : 0.3) : 0.4;
+  if (ph.migration > 0.3) { p.hardy = Math.max(p.hardy, ph.migration); p.disp *= 1 + ph.migration; p.m *= 1 + 0.06 * ph.migration; }
   // drying out: land needs a waterproof skin, lungs, seeds or eggs; they cost a little to build
   // (bare skin loses water fast, so amphibians stay near water; scales hold it in)
   const skin = ph.covering === 'skin' ? 0.15 : ph.covering === 'scales' ? -0.1 : 0;
@@ -391,6 +399,7 @@ export function evolvable(sp, ph) {
     care: ph.skeleton === 'endo' ? 1.2 : 0.4,
     metamorphosis: ph.skeleton === 'exo' || ph.covering === 'skin' || ph.skeleton === 'none' ? 1 : 0,
     sociality: ph.skeleton === 'exo' && ph.limbs === 3 ? key('sociality', 0.6, 2.2) : ph.skeleton === 'endo' ? 0.6 : 0,
+    migration: ph.flying || ph.skeleton === 'endo' ? 1 : 0.3,
   };
 }
 
@@ -455,7 +464,7 @@ export const ARCHETYPES = {
   pterosaur: vert({ carnivory: 0.75, motility: 0.8, size: 0.3, covering: 0.35, endothermy: 0.6, wings: 0.85, brain: 0.45 }),
   bat: vert({ carnivory: 0.7, motility: 0.8, size: 0.15, covering: 0.08, endothermy: 0.8, wings: 0.85, brain: 0.5, care: 0.85 }),
   rodent: vert({ carnivory: 0.3, motility: 0.7, size: 0.15, covering: 0.08, endothermy: 0.8, brain: 0.5, care: 0.6 }),
-  ungulate: vert({ carnivory: 0.1, motility: 0.8, size: 0.6, covering: 0.08, endothermy: 0.8, brain: 0.5, symbiosis: 0.75, care: 0.8, sociality: 0.65 }),
+  ungulate: vert({ carnivory: 0.1, motility: 0.8, size: 0.6, covering: 0.08, endothermy: 0.8, brain: 0.5, symbiosis: 0.75, care: 0.8, sociality: 0.65, migration: 0.45 }),
   carnivoran: vert({ carnivory: 0.85, motility: 0.8, size: 0.45, covering: 0.08, endothermy: 0.8, brain: 0.6, care: 0.85, sociality: 0.5 }),
   primate: vert({ carnivory: 0.45, motility: 0.7, size: 0.4, covering: 0.08, endothermy: 0.8, brain: 0.78, care: 0.9, sociality: 0.7 }),
   insect: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.2, motility: 0.6, size: 0.25, symmetry: 0.85, segments: 0.3, limbs: 0.75, skeleton: 0.12, landAdapt: 0.75, wings: 0.7, metamorphosis: 0.75 }),
@@ -463,8 +472,8 @@ export const ARCHETYPES = {
   amphibian: A({ adhesion: 0.85, differentiation: 0.8, ingest: 0.75, carnivory: 0.8, motility: 0.6, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.55, brain: 0.35, covering: 0.32, metamorphosis: 0.8 }),
   reptile: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.6, size: 0.45, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, brain: 0.4, covering: 0.6, care: 0.3 }),
   mammal: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.2, motility: 0.7, size: 0.45, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.55, covering: 0.08, care: 0.8 }),
-  bird: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.8, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.5, wings: 0.85, display: 0.7, covering: 0.9, care: 0.85 }),
-  whale: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.8, motility: 0.8, size: 0.85, symmetry: 0.85, segments: 0.2, limbs: 0.3, skeleton: 0.88, landAdapt: 0.5, endothermy: 0.8, brain: 0.6, covering: 0.08, care: 0.9 }),
+  bird: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.8, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.5, wings: 0.85, display: 0.7, covering: 0.9, care: 0.85, migration: 0.65 }),
+  whale: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.8, motility: 0.8, size: 0.85, symmetry: 0.85, segments: 0.2, limbs: 0.3, skeleton: 0.88, landAdapt: 0.5, endothermy: 0.8, brain: 0.6, covering: 0.08, care: 0.9, migration: 0.55 }),
   sapient: A({ adhesion: 0.9, differentiation: 0.9, ingest: 0.8, carnivory: 0.5, motility: 0.7, size: 0.5, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.95, covering: 0.08, care: 0.95, sociality: 0.8 }),
 };
 
