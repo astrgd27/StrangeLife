@@ -125,6 +125,9 @@ function nicheKey(sp) {
 const GROUP_CAP = { bacteria: 8, archaea: 6, protist: 8, plant: 10, fungus: 8, animal: 12 };
 // a few kinds of animal are famously species-rich
 const GRADE_CAP = { insect: 22, fish: 16, arthropod: 14, sponge: 7, jelly: 7, cyano: 7 };
+// how common a species is for its habitat: rivers and lakes are small, so their species are
+// judged against that when competition decides who is squeezed out
+const abundance = (sp) => sp.total * (sp.habitat === 3 ? 12 : 1);
 const capOf = (grade) => GRADE_CAP[grade] ?? GROUP_CAP[GRADES[grade].kingdom];
 
 // how strongly mate choice drives speciation (birds and fish are famous for it)
@@ -590,7 +593,7 @@ export class Ecosystem {
       // food pools by habitat (sea, land)
       // herbS/herbL count prey animals weighted by how easy they are to catch (size, armour,
       // speed and wings protect them), so well-defended prey are both safer and poorer food
-      let microS = 0, microL = 0, prodS = 0, prodL = 0, herbS = 0, herbL = 0, fungL = 0, decS = 0, decL = 0, reef = 0, forest = 0;
+      let microS = 0, microL = 0, prodS = 0, prodL = 0, prodF = 0, herbS = 0, herbL = 0, fungL = 0, decS = 0, decL = 0, reef = 0, forest = 0;
       let any = false;
       const nP = presN[z];
       for (let a = 0; a < nP; a++) {
@@ -600,7 +603,7 @@ export class Ecosystem {
         const h = tHab[s], hs = h === 0 ? 1 : h === 1 ? 0.5 : 0, hl = 1 - hs;
         const p = tPool[s];
         if (p === 0) { const v = b * tVuln[s]; microS += v * hs; microL += v * hl; }
-        else if (p === 1) { prodS += b * hs; prodL += b * hl; }
+        else if (p === 1) { prodS += b * hs; prodL += b * hl; if (h === 3) prodF += b; }
         else if (p === 2) { const v = b * tVuln[s]; herbS += v * hs; herbL += v * hl; }
         if (tTroph[s] === 2) { decS += b * hs; decL += b * hl; if (tKing[s] === fungK) fungL += b * hl; }
         const ge = engineer[s];
@@ -637,10 +640,13 @@ export class Ecosystem {
         if (tTroph[s] === 1) {
           // land capacity: water-storing plants do well where it's dry, climbers where there are
           // trees to climb, lichens on bare rock; fresh water has its own
-          let kl = h === 3 ? this.zKf[z] * nutL : KL * (1 + 2 * tSucc[s] * (1 - this.zMl[z])) * (1 + 1.5 * tClimb[s] * struct);
+          const dryness = this.zMl[z];
+          let kl = h === 3 ? this.zKf[z] * nutL
+            : KL * (1 + tSucc[s] * (2.4 * Math.max(0, 0.45 - dryness) - 0.8 * Math.max(0, dryness - 0.4))) * (1 + 1.5 * tClimb[s] * struct);
           if (tRock[s]) kl = Math.max(kl, 0.12 * zl);
           const K = (hs * KS + hl * kl * (pollinators || this.slots[s].grade !== 'flower' ? 1 : 0.6)) * tK[s] * (this.pollinated[s] ? 1.15 : 1);
-          const crowd = hs * prodS + hl * prodL;
+          // (water plants compete for light only with each other, not with the forest on the bank)
+          const crowd = h === 3 ? prodF : hs * prodS + hl * (prodL - prodF);
           nb = b + tR[s] * b * (suit * o2f - crowd / (K + 1e-6)) - mort * 0.3 * b;
           prodTotal += b;
           if (h > 0) landProd += b * hl;
@@ -780,7 +786,8 @@ export class Ecosystem {
       if (sp.range > sp.peakRange) sp.peakRange = sp.range;
       if (sp.total > sp.peak) sp.peak = sp.total;
       // too rare to persist: a few scattered stragglers don't make a viable species
-      if (sp.total < 2e-4 || (sp.total < 3e-3 && sp.range <= 3 && this.tick - sp.born > 150)) { this.extinct(s); continue; }
+      // (lake and river species are naturally confined to a few places, so they get more leeway)
+      if (sp.total < 2e-4 || (sp.total < 3e-3 && sp.range <= (sp.habitat === 3 ? 1 : 3) && this.tick - sp.born > 150)) { this.extinct(s); continue; }
       // a new kind of life counts once it has taken hold, not when a doomed first mutant appears
       if (!sp.estab && sp.range >= 4 && this.tick - sp.born > 25) this.establish(sp);
       // anagenesis: populations adapt to the temperatures they actually live in
@@ -813,7 +820,7 @@ export class Ecosystem {
     // out. A grade with far too many species also loses its rarest.
     for (const list of bins.values()) {
       if (list.length < 4 || rng() > 0.02 * (list.length - 3)) continue;
-      const worst = list.filter((q) => q.died < 0 && q.grade !== 'sapient' && this.tick - q.born > 100).sort((a, b) => a.total - b.total)[0];
+      const worst = list.filter((q) => q.died < 0 && q.grade !== 'sapient' && this.tick - q.born > 100).sort((a, b) => abundance(a) - abundance(b))[0];
       if (worst) { worst.outcompeted = true; this.extinct(worst.slot); }
     }
     for (const g in gradeCounts) {
@@ -822,9 +829,18 @@ export class Ecosystem {
       let worst = null;
       for (const s of this.alive) {
         const sp = this.slots[s];
-        if (sp.grade === g && g !== 'sapient' && this.tick - sp.born > 100 && (!worst || sp.total < worst.total)) worst = sp;
+        if (sp.grade === g && g !== 'sapient' && this.tick - sp.born > 100 && (!worst || abundance(sp) < abundance(worst))) worst = sp;
       }
       if (worst) { worst.outcompeted = true; this.extinct(worst.slot); }
+    }
+    // Colonising fresh water: now and then a population living beside a river or lake founds a
+    // freshwater species (most fail; the ones that fit the river or lake spread along it)
+    if (nA < SPEC_CAP && rng() < 0.01 * this.transitionRate * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 30) : 1)) {
+      const sp = this.slots[this.alive[Math.floor(rng() * nA)]];
+      if (sp && sp.habitat !== 3 && sp.grade !== 'sapient' && sp.grade !== 'lichen' && sp.grade !== 'whale') {
+        const z = this.pickZone(sp, (q) => this.habitatOk(3, q));
+        if (z >= 0) this.speciate(sp, sp.grade, z, null, 'colonise');
+      }
     }
     // Background turnover: a crowded biosphere keeps losing its rarest species, so there is always
     // room for new ones and evolution never stalls at the species limit
@@ -833,7 +849,7 @@ export class Ecosystem {
       for (const s of this.alive) {
         const sp = this.slots[s];
         if (sp.grade === 'sapient' || sp.seeded || this.tick - sp.born < 150) continue;
-        if (!worst || sp.total < worst.total) worst = sp;
+        if (!worst || abundance(sp) < abundance(worst)) worst = sp;
       }
       if (worst) { worst.outcompeted = true; this.extinct(worst.slot); }
     }
@@ -1024,6 +1040,8 @@ export class Ecosystem {
       // speciation by mate choice: same niche, a new courtship display and colours
       genes[GI.display] = Math.min(1, genes[GI.display] + 0.1);
       genes[GI.hue] = (genes[GI.hue] + 0.15 + 0.2 * rng()) % 1;
+    } else if (mode === 'colonise') {
+      habitat = 3;
     } else if (mode === 'innovation') {
       const before = genes[GI.landAdapt];
       const gene = innovate(genes, sp, sp.ph, rng);

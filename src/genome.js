@@ -84,7 +84,7 @@ export function develop(sp) {
   const limbs = animal && level === 3 && !radial ? Math.round(G('limbs') * 4) : 0;
   const sizeCap = [0.1, 0.25, 0.6, 1][level] * (animal && level === 3 && skeleton !== 'endo' ? 0.6 : 1);
   const size = G('size') * sizeCap;
-  const endo = animal && level === 3 && G('endothermy') > 0.55;
+  const endo = animal && level === 3 && G('skeleton') >= 0.7 && !radial && G('endothermy') > 0.55;
   const brain = animal && level === 3 ? G('brain') : 0;
   const flying = animal && level === 3 && G('wings') > 0.6 && size < 0.6 && (limbs >= 1 || skeleton === 'exo');
   const vascular = plant ? G('vascular') : 0;
@@ -137,7 +137,8 @@ export function classify(sp, ph, habitat, prev) {
   if (wet) return ph.endo && sp.landAnc ? 'whale' : 'fish';
   if (ph.landAdapt < 0.35) return 'fish'; // shore fish
   if (!ph.endo && (ph.covering === 'skin' || ph.landAdapt < 0.6)) return 'amphibian';
-  if (ph.covering === 'fur') return pickOrder(MAMMALS, sp, ph, habitat, prev, G);
+  // (a warm-blooded mammal that loses its fur, like a naked mole rat, is still a mammal)
+  if (ph.covering === 'fur' || (ph.endo && ph.covering === 'skin' && FAMILY[prev] === 'mammals')) return pickOrder(MAMMALS, sp, ph, habitat, prev, G);
   return pickOrder(SAUROPSIDS, sp, ph, habitat, prev, G);
 }
 
