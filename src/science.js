@@ -89,6 +89,16 @@ export const STORY = [
 ];
 
 export const EVENTS = {
+  iceage: { icon: '🧊', title: 'Ice ages come and go', earth: 'About 50 glacial cycles in the last 2.6 million years',
+    text: 'Slow wobbles in a planet\'s orbit and tilt (Milankovitch cycles) change where sunlight falls. On a cool planet, ice amplifies them into ice ages. As glaciers advance, species retreat into warm refuges and their ranges break apart; when the ice melts they spread out again, often as new species. Biologists call this a "species pump".' },
+  radiation: { icon: '🎆', title: 'Adaptive radiation', earth: 'Mammals after the dinosaurs; cichlid fish in Lake Victoria (~500 species in ~15,000 years)',
+    text: 'When a group finds itself with open opportunities (empty niches after an extinction, a new island, or a new ability), it can split into many species very quickly, each adapting to a different way of life.' },
+  cospeciation: { icon: '🐝', title: 'Coevolution', earth: 'Figs and fig wasps; flowering plants and their pollinators',
+    text: 'Many insects feed on, or pollinate, just one kind of plant. When the plant splits into two species, its specialists often split with it, so their family trees mirror each other. This is a big reason there are so many insects: every new plant creates new niches for them.' },
+  island: { icon: '🏝️', title: 'The island rule', earth: 'Dwarf elephants on Mediterranean islands; giant Komodo dragons and dodos',
+    text: 'On isolated islands, with little food and few predators, large animals often evolve to be small and small animals to be large. Islands also hold many endemic species: ones found nowhere else.' },
+  sexualsel: { icon: '🦚', title: 'Sexual selection', earth: 'Birds of paradise; Darwin first described it in 1871',
+    text: 'Choosy mates can drive evolution as strongly as survival does. When females in two populations come to prefer different colours or songs, the populations stop interbreeding and become separate species, even while living side by side.' },
   allopatric: { icon: '🏝️', title: 'Isolation makes new species', earth: 'Darwin\'s finches; fish on either side of Panama, ~3 million years ago',
     text: 'Most new species form when a population is cut off: by a new sea, a mountain range, or a band of unsuitable climate. Separated, the two halves adapt to their own conditions and drift apart genetically until they can no longer interbreed. Biologists call this allopatric speciation.' },
   supercontinent: { icon: '🌐', title: 'A supercontinent', earth: 'Pangaea, ~335–175 million years ago; Rodinia, ~1.1 billion years ago',

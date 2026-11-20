@@ -99,15 +99,29 @@ export class UI {
       if (story) this.openCard(story);
       else if (ev && !this.seenEvents?.has(e.event)) { (this.seenEvents ||= new Set()).add(e.event); this.openCard(ev); }
     } else if (e.type === 'extinction') {
-      if (e.species.seeded && e.species.peakRange < 6) return;
+      if (e.species.peakRange < 20) return; // only species that had spread widely
       const why = e.species.outcompeted ? 'was outcompeted and went extinct' : 'went extinct';
       this.chronicle(e.tick, `${e.species.icon} ${e.species.name} (${GRADES[e.species.grade].name.toLowerCase()}) ${why}.`, true);
       if (e.species.peakRange >= 500) this.toast(`${e.species.icon} ${e.species.name} ${why}.`, 'bad');
+    } else if (e.type === 'radiation') {
+      const G = GRADES[e.grade];
+      this.toast(`🎆 Adaptive radiation: ${G.name.toLowerCase()} are diversifying fast.`, 'star');
+      this.chronicle(e.tick, `${G.icon} Adaptive radiation: ${e.count} new species of ${G.name.toLowerCase()} in a short time.`);
+      this.firstCard('radiation');
+    } else if (e.type === 'cospeciation') {
+      this.firstCard('cospeciation');
+      if (!this.coNoted) { this.coNoted = true; this.chronicle(e.tick, `${e.species.icon} ${e.species.name} split along with its host plant, ${e.host.name}: coevolution.`); }
+    } else if (e.type === 'island') {
+      this.firstCard('island');
+      this.chronicle(e.tick, `${e.species.icon} On an island, ${e.species.name} evolves into a ${e.change === 'giant' ? 'giant' : 'dwarf'} form of ${e.parent.name}.`);
+    } else if (e.type === 'sexualsel') {
+      this.firstCard('sexualsel');
     } else if (e.type === 'allopatric') {
       if (!this.seenEvents?.has('allopatric')) { (this.seenEvents ||= new Set()).add('allopatric'); this.openCard(EVENTS.allopatric); }
       if (e.zones >= 12) this.chronicle(e.tick, `${e.species.icon} Cut off from the rest of its range, a population of ${e.parent.name} becomes a new species, ${e.species.name}.`);
     } else if (e.type === 'lineage') {
-      this.chronicle(e.tick, `${e.species.icon} ${GRADES[e.species.grade].name} arise again, from ${e.parent.name}.`);
+      const g = e.species.grade;
+      if (e.tick - ((this.lineageNoted ||= {})[g] ?? -1e9) > 1500) { this.lineageNoted[g] = e.tick; this.chronicle(e.tick, `${e.species.icon} ${GRADES[g].name} arise again, from ${e.parent.name}.`); }
     } else if (e.type === 'eon') {
       const eon = EONS[e.eon];
       this.toast(`The ${eon.name} eon begins.`, 'star');
@@ -121,6 +135,12 @@ export class UI {
       const now = performance.now();
       if (now - (this.lastComet || 0) > 1500) { this.lastComet = now; this.r.launchMeteor(e.cell, null, 'comet'); }
     }
+  }
+
+  firstCard(key) {
+    if (this.seenEvents?.has(key)) return;
+    (this.seenEvents ||= new Set()).add(key);
+    this.openCard(EVENTS[key]);
   }
 
   toast(text, kind = '') {
@@ -218,7 +238,9 @@ export class UI {
           <dt>Range</dt><dd>${sp.range} zones (peak ${sp.peakRange})</dd>
           <dt>Climate</dt><dd>${sp.pref.toFixed(0)}°C ± ${sp.tol.toFixed(0)}°</dd>
           <dt>Niche</dt><dd>${nicheText(sp)}</dd>
-          ${sp.allopatric ? '<dt>Origin</dt><dd>Split off after its population was isolated</dd>' : ''}
+          ${sp.allopatric ? '<dt>Origin</dt><dd>Split off after its population was isolated</dd>' : sp.display ? '<dt>Origin</dt><dd>Split by mate choice (sexual selection)</dd>' : sp.cospeciated ? '<dt>Origin</dt><dd>Split along with its host plant</dd>' : ''}
+          ${sp.host && E.species.get(sp.host) ? `<dt>Specialist</dt><dd>Feeds on ${E.species.get(sp.host).icon} <i>${esc(E.species.get(sp.host).name)}</i>${E.species.get(sp.host).died >= 0 ? ' (extinct)' : ''}</dd>` : ''}
+          ${sp.island ? '<dt>Island</dt><dd>Evolved on an island; found nowhere else</dd>' : ''}
           <dt>Needs O₂</dt><dd>${G.o2 ? `${G.o2}% or more` : 'none (anaerobic)'}</dd>
           <dt>Reproduction</dt><dd>${sp.sexual ? 'Sexual' : 'Asexual (cloning or splitting)'}</dd>
         </dl>`;
@@ -233,6 +255,7 @@ export class UI {
           <span class="tag h${sp.habitat}">${HABITAT_NAMES[sp.habitat]}</span>
           ${sp.pref < 2 ? '<span class="tag h0">Cold-adapted</span>' : sp.pref > 30 ? '<span class="tag t5">Heat-loving</span>' : ''}
           ${nicheTags(sp)}
+          ${sp.host ? '<span class="tag t3">Specialist</span>' : ''}${sp.island ? '<span class="tag h1">Island</span>' : ''}${sp.range > 0 && sp.range <= 15 ? '<span class="tag">Endemic</span>' : ''}
         </span>${detail}</li>`;
     });
     setHTML($('species-list'), rows.join('') || '<li class="muted small">None living.</li>');
@@ -314,6 +337,11 @@ export class UI {
     html += gauge('Ozone shield', `${Math.round(P.ozone * 100)}%`, P.ozone, P.ozone < 0.5 ? 'Without ozone, ultraviolet light sterilises dry land.' : '', 'g-o3');
     html += gauge('Ocean cover', `${Math.round(P.oceanFrac * 100)}%`, P.oceanFrac, '', 'g-sea');
     html += gauge('Ice cover', `${Math.round(P.iceFrac * 100)}%`, P.iceFrac, '', 'g-ice');
+    if (P.cycles) {
+      const glacial = P.orbital < -0.45 * P.cycleAmp, warm = P.orbital > 0.45 * P.cycleAmp;
+      html += gauge('Orbital climate cycle', `${P.orbital >= 0 ? '+' : ''}${P.orbital.toFixed(1)}°C`, 0.5 + P.orbital / 10,
+        glacial ? 'Ice age: glaciers advance and species retreat into refuges.' : warm ? 'Warm interglacial.' : P.cycleAmp < 2 ? 'Mild on a warm planet; ice ages bite harder when it is cool.' : '', 'g-orb');
+    }
     const T = W.tect;
     html += gauge('Continents', `${T.landmasses} landmass${T.landmasses === 1 ? '' : 'es'}`, T.largestShare, T.speed > 0 ? `${T.P} plates drifting. The largest landmass holds ${Math.round(T.largestShare * 100)}% of the land.` : 'Continental drift is switched off.', 'g-land');
     html += gauge('Sunlight', `${Math.round(P.sun * 100)}% of today`, (P.sun - 0.7) / 0.35, P.sun < 0.85 ? 'The young Sun is dim; a strong greenhouse keeps the planet warm.' : '', 'g-sun');

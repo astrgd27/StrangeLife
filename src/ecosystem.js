@@ -19,7 +19,7 @@ import { genusName, speciesEpithet } from './names.js';
 
 export const ZONE_LEVEL = 4;
 const MAXT = 160;            // species slots
-const SOFT_CAP = 60;         // speciation slows above this many living species
+const SOFT_CAP = 80;         // speciation slows above this many living species
 const SPEC_CAP = MAXT - 25;  // ordinary speciation stops here, keeping slots free for major transitions
 const EXTINCT = 1e-5;
 
@@ -78,9 +78,22 @@ export function nicheTol(grade) {
   if (G.kingdom === 'plant') return { n2: 0.22, alt: 0.25 };
   if (G.kingdom === 'fungus') return { n2: 0.35, alt: 0.4 };
   if (G.kingdom === 'protist') return { n2: 0.45, alt: 0.5 };
-  if (grade === 'mammal' || grade === 'bird' || grade === 'whale') return { n2: 0.35, alt: 0.4 };
-  return { n2: 0.3, alt: 0.3 };
+  if (grade === 'mammal' || grade === 'bird' || grade === 'whale') return { n2: 0.45, alt: 0.5 };
+  return { n2: 0.38, alt: 0.4 };
 }
+
+// Niche bins for diversity-dependence and competitive exclusion: same group, habitat, diet,
+// ~8 °C temperature band, rainfall/depth third, and host plant.
+function nicheKey(sp) {
+  return `${sp.grade}|${sp.habitat}|${sp.trophic}|${Math.floor((sp.pref + 40) / 8)}|${Math.min(2, Math.floor(sp.n2 * 3))}|${sp.host || 0}`;
+}
+
+// How many species a single group (e.g. seaweeds, insects) tends to hold before its splitting
+// slows. Animals, insects above all, are where most of Earth's species are.
+const GROUP_CAP = { bacteria: 8, archaea: 6, protist: 8, plant: 10, fungus: 8, animal: 22 };
+
+// how strongly mate choice drives speciation (birds and fish are famous for it)
+const SEXUAL_SELECTION = { bird: 2, fish: 1.5, insect: 1, mammal: 0.8, reptile: 0.8, amphibian: 0.8, arthropod: 0.6 };
 
 // icon variants within a grade (by diet and size)
 function pickIcon(g, trophic, size) {
@@ -150,6 +163,10 @@ export class Ecosystem {
     this.wChem = new Float32Array(MAXT); this.wMicro = new Float32Array(MAXT); this.wProd = new Float32Array(MAXT);
     this.wHerb = new Float32Array(MAXT); this.wDet = new Float32Array(MAXT);
     this.tKing = new Int8Array(MAXT);
+    this.tHost = new Int16Array(MAXT).fill(-1); // specialist herbivores: slot of their host plant
+    this.recentMax = 0;      // recent peak species count, for spotting post-extinction recovery
+    this.specLog = {};       // recent speciation ticks per grade, for spotting adaptive radiations
+    this.radiationNoted = {};
     this.total = new Float32Array(MAXT); this.range = new Int32Array(MAXT); this.sumT = new Float32Array(MAXT);
 
     // zones ↔ terrain cells (the first Z terrain vertices are exactly the zone centres)
@@ -182,6 +199,7 @@ export class Ecosystem {
     this.detS = new Float32Array(Z); this.detL = new Float32Array(Z);
     this.coverS = new Float32Array(Z); this.coverL = new Float32Array(Z);
     this.suit = new Float32Array(Z * MAXT);
+    this.zStruct = new Float32Array(Z);
     // per-zone lists of the species present, so the simulation skips empty entries
     this.pres = new Uint8Array(Z * MAXT);
     this.presN = new Uint16Array(Z);
@@ -247,7 +265,9 @@ export class Ecosystem {
       const d = (T - pref) / tol;
       const e = ((h === 0 ? this.zDs[z] : this.zMl[z]) - n2) / n2t;
       const a = h === 2 ? (this.zHl[z] - alt) / altT : 0;
-      suit[z * MAXT + s] = Math.exp(-0.5 * (d * d + e * e + a * a));
+      // temperature limits survival outright; rainfall/depth and altitude shape how well a
+      // species does (a mismatch costs up to 70% of its performance, not its life)
+      suit[z * MAXT + s] = Math.exp(-0.5 * d * d) * (0.3 + 0.7 * Math.exp(-0.5 * (e * e + a * a)));
     }
   }
 
@@ -269,6 +289,7 @@ export class Ecosystem {
       pref: opts.pref ?? 20, tol: opts.tol ?? G.tol,
       n2: opts.n2 ?? 0.5, n2tol: opts.n2tol ?? nicheTol(grade).n2,
       alt: opts.alt ?? 0.1, altTol: opts.altTol ?? nicheTol(grade).alt,
+      host: opts.host || 0,
       sexual: opts.sexual ?? (G.tier >= 2 || G.kingdom === 'animal' || G.kingdom === 'fungus'),
       parent: parent ? parent.id : 0, born: this.tick, bornYears: opts.years ?? 0, died: -1,
       total: 0, range: 0, peak: 0, peakRange: 0, seeded: !!opts.seeded,
@@ -298,6 +319,10 @@ export class Ecosystem {
     // hunters are adapted to finding sparse prey; grazers live among abundant food
     this.tHalf[s] = (G.half || 1) * (sp.trophic === TROPHIC.PREDATOR ? 0.12 : sp.trophic === TROPHIC.OMNI ? 0.35 : 1);
     this.tO2[s] = G.o2; this.tDisp[s] = G.disp; this.tSelf[s] = (G.self || 0) * (sp.sexual ? 0.75 : 1);
+    // specialists are efficient on their one host plant and can't use anything else
+    const host = sp.host ? this.species.get(sp.host) : null;
+    this.tHost[s] = host && host.died < 0 ? host.slot : -1;
+    if (this.tHost[s] >= 0) { this.tImax[s] *= 1.35; this.tHalf[s] *= 0.4; }
     // what it eats
     this.wChem[s] = this.wMicro[s] = this.wProd[s] = this.wHerb[s] = this.wDet[s] = 0;
     const animal = G.kingdom === 'animal';
@@ -335,6 +360,14 @@ export class Ecosystem {
     }
     this.slots[slot] = null;
     this.alive.splice(this.alive.indexOf(slot), 1);
+    // specialists that fed on this species switch to a close relative, or broaden their diet
+    for (const s of this.alive) {
+      const q = this.slots[s];
+      if (q.host !== sp.id) continue;
+      const kin = this.alive.map((t) => this.slots[t]).filter((t) => t.grade === sp.grade && t.habitat !== 0);
+      q.host = kin.length ? kin.sort((a, b) => Math.abs(a.pref - q.pref) - Math.abs(b.pref - q.pref))[0].id : 0;
+      this.setParams(q);
+    }
     if (sp.peakRange >= 6) this.onEvent({ type: 'extinction', species: sp });
   }
 
@@ -346,6 +379,14 @@ export class Ecosystem {
     for (let k = zg.nbrStart[z]; k < zg.nbrStart[z + 1]; k++) {
       const q = zg.nbr[k];
       if (ok(q)) this.addB(q, s, amount * 0.5);
+    }
+  }
+
+  // spread an existing species across every zone that suits it (for starting an established world)
+  populate(sp, amount, minSuit = 0.35) {
+    for (let z = 0; z < this.Z; z++) {
+      if (!this.habitatOk(sp.habitat, z) || this.suit[z * MAXT + sp.slot] < minSuit) continue;
+      this.addB(z, sp.slot, amount * this.suit[z * MAXT + sp.slot]);
     }
   }
 
@@ -421,13 +462,23 @@ export class Ecosystem {
     this.years = years;
     const P = this.planet, B = this.B, Z = this.Z, alive = this.alive;
     const o2 = P.o2, ozone = P.ozone;
-    const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing } = this;
+    const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing, tHost } = this;
+    // which species build reefs (1) or forests (2)
+    const engineer = this._eng || (this._eng = new Uint8Array(MAXT));
+    for (const s of alive) {
+      const sp = this.slots[s];
+      engineer[s] = sp.grade === 'sponge' && sp.habitat === 0 ? 1 : (sp.grade === 'fern' || sp.grade === 'conifer' || sp.grade === 'flower') && sp.size > 0.45 ? 2 : 0;
+    }
     const total = this.total, range = this.range, sumT = this.sumT, pres = this.pres, presN = this.presN;
     const sumN2 = this.sumN2 || (this.sumN2 = new Float32Array(MAXT)), sumA = this.sumA || (this.sumA = new Float32Array(MAXT));
     total.fill(0); range.fill(0); sumT.fill(0); sumN2.fill(0); sumA.fill(0);
     const nA = alive.length;
     const fungK = KINGDOM_KEYS.indexOf('fungus');
     const pollinators = this.gradeAlive('insect') || this.gradeAlive('bird');
+    // plants with their own specialist insects get dedicated pollinators
+    const pollinated = this.pollinated || (this.pollinated = new Uint8Array(MAXT));
+    pollinated.fill(0);
+    for (const s of alive) if (tHost[s] >= 0) pollinated[tHost[s]] = 1;
     const newB = this._newB || (this._newB = new Float32Array(MAXT));
     const suitArr = this.suit;
     const archK = KINGDOM_KEYS.indexOf('archaea');
@@ -441,7 +492,7 @@ export class Ecosystem {
       const base = z * MAXT;
       const zs = this.zSea[z], zl = this.zLand[z];
       // food pools by habitat (sea, land)
-      let microS = 0, microL = 0, prodS = 0, prodL = 0, herbS = 0, herbL = 0, fungL = 0, decS = 0, decL = 0;
+      let microS = 0, microL = 0, prodS = 0, prodL = 0, herbS = 0, herbL = 0, fungL = 0, decS = 0, decL = 0, reef = 0, forest = 0;
       let any = false;
       const nP = presN[z];
       for (let a = 0; a < nP; a++) {
@@ -454,6 +505,8 @@ export class Ecosystem {
         else if (p === 1) { prodS += b * hs; prodL += b * hl; }
         else if (p === 2) { herbS += b * hs; herbL += b * hl; }
         if (tTroph[s] === 2) { decS += b * hs; decL += b * hl; if (tKing[s] === fungK) fungL += b * hl; }
+        const ge = engineer[s];
+        if (ge === 1) reef += b; else if (ge === 2) forest += b;
       }
       if (!any) { presN[z] = 0; this.orgFactor[z] = 1; this.coverS[z] = 0; this.coverL[z] = 0; continue; }
       const detS = this.detS[z], detL = this.detL[z], org = this.zOrg[z];
@@ -461,6 +514,11 @@ export class Ecosystem {
       const nutS = 1 + 0.3 * Math.min(1, decS / 0.02);
       const nutL = 1 + 0.25 * Math.min(1, decL / 0.02) + 0.35 * Math.min(1, fungL / 0.02);
       const KS = this.zKs[z] * nutS, KL = this.zKl[z] * nutL;
+      // ecosystem engineers: coral reefs in sunlit shallows and tall forests build 3D habitat,
+      // with more hiding places and microhabitats, so more species can coexist in the zone
+      const struct = Math.min(1, (this.zDs[z] < 0.35 ? reef / 0.02 : 0) * 0.6 + forest / (0.4 * Math.max(0.05, this.zKl[z])));
+      this.zStruct[z] = struct;
+      const coexist = 1 - 0.45 * struct;
       let cMicroS = 0, cMicroL = 0, cProdS = 0, cProdL = 0, cHerbS = 0, cHerbL = 0, cDetS = 0, cDetL = 0, cChem = 0;
       let deadS = 0, deadL = 0;
 
@@ -479,7 +537,7 @@ export class Ecosystem {
         if (tKing[s] === archK) mort += archO2;
         let nb;
         if (tTroph[s] === 1) {
-          const K = (hs * KS + hl * KL * (pollinators || this.slots[s].grade !== 'flower' ? 1 : 0.6)) * tK[s];
+          const K = (hs * KS + hl * KL * (pollinators || this.slots[s].grade !== 'flower' ? 1 : 0.6)) * tK[s] * (this.pollinated[s] ? 1.15 : 1);
           const crowd = hs * prodS + hl * prodL;
           nb = b + tR[s] * b * (suit * o2f - crowd / (K + 1e-6)) - mort * 0.3 * b;
           prodTotal += b;
@@ -487,13 +545,14 @@ export class Ecosystem {
         } else {
           const own = b;
           const fMicro = wMicro[s] * Math.max(0, hs * microS + hl * microL - (tPool[s] === 0 ? own : 0));
-          const fProd = wProd[s] * (hs * prodS + hl * prodL);
+          const hostSlot = tHost[s];
+          const fProd = wProd[s] * (hostSlot >= 0 ? B[base + hostSlot] : hs * prodS + hl * prodL);
           const fHerb = wHerb[s] * Math.max(0, hs * herbS + hl * herbL - (tPool[s] === 2 ? own : 0));
           const fDet = wDet[s] * (hs * detS + hl * detL);
           const fChem = wChem[s] * org * hs;
           const F = fMicro + fProd + fHerb + fDet + fChem;
           const I = F > 0 ? tImax[s] * F / (F + tHalf[s]) : 0;
-          nb = b + b * (tE[s] * I * suit * o2f - mort - tSelf[s] * b);
+          nb = b + b * (tE[s] * I * suit * o2f - mort - tSelf[s] * coexist * b);
           if (F > 0) {
             const eat = b * I / F;
             cMicroS += eat * fMicro * hs; cMicroL += eat * fMicro * hl;
@@ -573,7 +632,9 @@ export class Ecosystem {
         let cnt = 0;
         for (let k = k0; k < k1; k++) if (ok[zg.nbr[k] * 3 + h]) cnt++;
         if (!cnt) continue;
-        const out = b * Math.min(0.5, this.tDisp[s] * 4); // dispersal runs every 4th tick
+        // dispersal rises with crowding: sparse populations mostly stay put instead of
+        // smearing themselves too thin to breed (runs every 4th tick)
+        const out = b * Math.min(0.5, this.tDisp[s] * 4) * (b / (b + 0.0015));
         B[base + s] = b - out;
         recZ[n] = z; recS[n] = s; recA[n] = out / cnt; n++;
       }
@@ -591,8 +652,20 @@ export class Ecosystem {
   evolve() {
     const rng = this.rng;
     const nA = this.alive.length;
-    const gradeCounts = {};
-    for (const s of this.alive) { const g = this.slots[s].grade; gradeCounts[g] = (gradeCounts[g] || 0) + 1; }
+    const gradeCounts = {}, bins = new Map();
+    for (const s of this.alive) {
+      const sp = this.slots[s];
+      gradeCounts[sp.grade] = (gradeCounts[sp.grade] || 0) + 1;
+      const k = (sp._bin = nicheKey(sp)); // fixed for this pass; adaptation may shift the niche below
+      if (!bins.has(k)) bins.set(k, []);
+      bins.get(k).push(sp);
+    }
+    // Ecological opportunity: after a mass extinction, empty niches let survivors diversify
+    // fast (an adaptive radiation), the way mammals did after the dinosaurs.
+    if (this.tick % 20 === 0) this.recentMax = Math.max(nA, this.recentMax * 0.985);
+    this.opportunity = 1 + 4 * Math.max(0, (this.recentMax - nA) / Math.max(1, this.recentMax));
+    const opp = this.opportunity;
+    this._bins = bins; this._gradeCounts = gradeCounts;
     for (const s of this.alive.slice()) {
       const sp = this.slots[s];
       sp.total = this.total[s]; sp.range = this.range[s];
@@ -612,16 +685,29 @@ export class Ecosystem {
       // speciation: a population splits off and goes its own way
       if (nA >= SPEC_CAP) continue;
       const rangeF = Math.max(0.2, Math.min(2.5, sp.range / 25));
-      // diversity-dependent diversification: a crowded niche (same grade) splits more slowly
-      const nG = gradeCounts[sp.grade];
-      const crowded = (nG > 10 ? Math.exp(-(nG - 10) / 5) : 1) * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 25) : 1);
-      const pSpec = 0.0009 * this.mutationRate * rangeF * (sp.sexual ? 1.5 : 1) * crowded;
+      // diversity-dependent diversification: species packed into the same niche split more slowly
+      const nB = bins.get(sp._bin)?.length ?? 1, nG = gradeCounts[sp.grade];
+      const gCap = GROUP_CAP[sp.kingdom];
+      const crowded = Math.exp(-(nB - 1) / 2) * (nG > gCap ? Math.exp(-(nG - gCap) / 4) : 1) * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 25) : 1);
+      const pSpec = 0.0009 * this.mutationRate * rangeF * (sp.sexual ? 1.5 : 1) * crowded * opp;
       if (rng() < pSpec) this.speciate(sp, sp.grade);
+      // sexual selection: in showy animals, mate choice alone can split a population
+      const SS = SEXUAL_SELECTION[sp.grade];
+      if (SS && sp.sexual && rng() < 0.0004 * SS * this.mutationRate * rangeF * crowded * opp) {
+        const z = this.pickZone(sp);
+        if (z >= 0) this.speciate(sp, sp.grade, z, null, 'sexual');
+      }
     }
-    // Competitive exclusion: when one grade holds too many species, the rarest is squeezed out.
+    // Competitive exclusion: species sharing one niche can't all persist; the rarest is squeezed
+    // out. A grade with far too many species also loses its rarest.
+    for (const list of bins.values()) {
+      if (list.length < 4 || rng() > 0.02 * (list.length - 3)) continue;
+      const worst = list.filter((q) => q.died < 0 && this.tick - q.born > 100).sort((a, b) => a.total - b.total)[0];
+      if (worst) { worst.outcompeted = true; this.extinct(worst.slot); }
+    }
     for (const g in gradeCounts) {
-      const nG = gradeCounts[g];
-      if (nG <= 12 || rng() > 0.015 * (nG - 12)) continue;
+      const nG = gradeCounts[g], cap = GROUP_CAP[GRADES[g].kingdom] + 2;
+      if (nG <= cap || rng() > 0.025 * (nG - cap)) continue;
       let worst = null;
       for (const s of this.alive) {
         const sp = this.slots[s];
@@ -641,8 +727,10 @@ export class Ecosystem {
         cands.push([sp, w]); weight += w;
       }
       if (!weight) continue;
-      const repeat = this.innovations.has(t.key) ? 0.3 : 1;
-      if (rng() >= t.p * this.transitionRate * Math.min(4, Math.max(0.6, weight / 25)) * repeat) continue;
+      // a group that already exists and is crowded rarely gets a fresh origin
+      const nTo = gradeCounts[t.to] || 0, capTo = GROUP_CAP[GRADES[t.to].kingdom];
+      const repeat = this.innovations.has(t.key) ? 0.3 * (nTo > capTo / 2 ? Math.exp(-(nTo - capTo / 2) / 2) : 1) : 1;
+      if (rng() >= t.p * this.transitionRate * Math.min(4, Math.max(0.6, weight / 25)) * repeat * Math.sqrt(opp)) continue;
       let r = rng() * weight, sp = cands[0][0];
       for (const [c, w] of cands) { r -= w; if (r <= 0) { sp = c; break; } }
       const z = this.pickZone(sp, (q) => t.need(this, q, sp) && (t.hab === undefined || this.habitatOk(t.hab, q)));
@@ -695,11 +783,20 @@ export class Ecosystem {
           for (const z of p.zones) if (set.has(z)) overlap++;
           if (overlap >= 0.5 * Math.min(p.zones.length, c.zones.length)) { count = p.count + 1; break; }
         }
-        if (count >= ISOLATION_CHECKS && this.alive.length < MAXT - 5) this.splitFragment(sp, c);
-        else next.push({ zones: c.zones, count });
+        if (count >= ISOLATION_CHECKS && this.alive.length < MAXT - 5) {
+          // in a crowded niche the isolated population usually fails to become distinct
+          if (this.rng() < this.crowding(sp) * this.opportunity) this.splitFragment(sp, c);
+        } else next.push({ zones: c.zones, count });
       }
       sp.isolates = next;
     }
+  }
+
+  // how much room a species' niche and group leave for a new species (1 = plenty)
+  crowding(sp) {
+    const nB = this._bins?.get(sp._bin)?.length ?? 1, nG = this._gradeCounts?.[sp.grade] ?? 1;
+    const gCap = GROUP_CAP[sp.kingdom], nA = this.alive.length;
+    return Math.exp(-(nB - 1) / 2) * (nG > gCap ? Math.exp(-(nG - gCap) / 4) : 1) * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 25) : 1);
   }
 
   splitFragment(sp, frag) {
@@ -716,9 +813,22 @@ export class Ecosystem {
       parent: sp.id, habitat: sp.habitat, trophic: sp.trophic, sexual: sp.sexual,
       pref: T / w + gaussian(rng) * 1.5, tol: sp.tol * Math.exp(gaussian(rng) * 0.08),
       n2: clamp01(n2 / w + gaussian(rng) * 0.05), n2tol: sp.n2tol, alt: clamp01(alt / w), altTol: sp.altTol,
-      size: Math.max(0, Math.min(1, sp.size + gaussian(rng) * 0.08)), years: this.years,
+      size: Math.max(0, Math.min(1, sp.size + gaussian(rng) * 0.08)), years: this.years, host: sp.host,
     });
     if (!child) return null;
+    // the island rule: on small islands, small animals tend to grow large (Komodo dragons) and
+    // large ones shrink (dwarf elephants), as food and predators are scarce
+    const island = sp.habitat !== 0 && frag.zones.length <= 10 && frag.zones.every((z) => this.zSea[z] > 0.35);
+    if (island) {
+      child.island = true;
+      if (sp.kingdom === 'animal') {
+        const old = child.size;
+        child.size = old < 0.35 ? Math.min(1, old + 0.3) : old > 0.6 ? Math.max(0, old - 0.35) : old;
+        child.icon = pickIcon(child.grade, child.trophic, child.size);
+        this.setParams(child);
+        if (Math.abs(child.size - old) > 0.2) this.onEvent({ type: 'island', species: child, parent: sp, change: child.size > old ? 'giant' : 'dwarf' });
+      }
+    }
     for (const z of frag.zones) {
       const b = B[z * MAXT + s];
       if (b <= 0) continue;
@@ -727,6 +837,8 @@ export class Ecosystem {
     }
     child.allopatric = true;
     this.onEvent({ type: 'allopatric', species: child, parent: sp, zones: frag.zones.length });
+    this.logSpeciation(child);
+    this.cospeciate(sp, child, frag.zones);
     return child;
   }
 
@@ -746,11 +858,14 @@ export class Ecosystem {
     return best;
   }
 
-  speciate(sp, grade, z = this.pickZone(sp), transition = null) {
+  speciate(sp, grade, z = this.pickZone(sp), transition = null, mode = 'peripatric') {
     if (z < 0) return null;
     const rng = this.rng, G = GRADES[grade];
     let habitat = sp.habitat, trophic = sp.trophic;
-    if (transition) {
+    const sexualSel = mode === 'sexual';
+    if (sexualSel) {
+      // speciation by mate choice: same niche, new courtship display
+    } else if (transition) {
       habitat = transition.hab ?? (G.habitats.includes(sp.habitat) ? sp.habitat : G.habitats[0]);
       trophic = G.trophics.includes(sp.trophic) ? sp.trophic : G.trophics[0];
     } else {
@@ -760,17 +875,20 @@ export class Ecosystem {
     if (!G.habitats.includes(habitat)) habitat = G.habitats[0];
     if (!this.habitatOk(habitat, z)) return null;
     const L = this.localNiche(habitat, z);
-    const pref = sp.pref + (L.T - sp.pref) * 0.5 + gaussian(rng) * 3;
+    const shift = sexualSel ? 0.1 : 0.5;
+    const pref = sp.pref + (L.T - sp.pref) * shift + gaussian(rng) * (sexualSel ? 0.5 : 3);
     const clamp01 = (v) => Math.max(0, Math.min(1, v));
-    const n2 = clamp01(habitat === sp.habitat ? sp.n2 + (L.n2 - sp.n2) * 0.5 + gaussian(rng) * 0.1 : L.n2);
-    const alt = clamp01(habitat === 2 ? (sp.habitat === 2 ? sp.alt : L.alt) + (L.alt - sp.alt) * 0.5 + gaussian(rng) * 0.08 : 0);
+    const n2 = clamp01(habitat === sp.habitat ? sp.n2 + (L.n2 - sp.n2) * shift + gaussian(rng) * (sexualSel ? 0.02 : 0.1) : L.n2);
+    const alt = clamp01(habitat === 2 ? (sp.habitat === 2 ? sp.alt : L.alt) + (L.alt - sp.alt) * shift + gaussian(rng) * (sexualSel ? 0.02 : 0.08) : 0);
     const tol = Math.max(3, Math.min(30, (transition ? G.tol : sp.tol) * Math.exp(gaussian(rng) * 0.15)));
-    const size = transition ? 0.2 + rng() * 0.2 : sp.size + gaussian(rng) * 0.12;
+    const size = transition ? 0.2 + rng() * 0.2 : sp.size + gaussian(rng) * (sexualSel ? 0.03 : 0.12);
     const eukaryote = G.kingdom !== 'bacteria' && G.kingdom !== 'archaea';
     const sexual = eukaryote && (sp.sexual || G.tier >= 2 || rng() < 0.15);
-    const child = this.createSpecies(grade, { parent: sp.id, habitat, trophic, pref, tol, size, sexual, n2, alt, years: this.years,
+    const host = transition ? 0 : this.chooseHost(sp, grade, trophic, z);
+    const child = this.createSpecies(grade, { parent: sp.id, habitat, trophic, pref, tol, size, sexual, n2, alt, host, years: this.years,
       n2tol: transition ? undefined : Math.max(0.08, Math.min(1.2, sp.n2tol * Math.exp(gaussian(rng) * 0.15))) });
     if (!child) return null;
+    if (sexualSel) child.display = true;
     // the founding population: part of the parent's local population becomes the new species
     const zg = this.zgrid;
     const take = (q, frac) => {
@@ -788,9 +906,57 @@ export class Ecosystem {
       this.innovations.add(transition.key);
       this.onEvent({ type: 'transition', key: transition.key, first, species: child, parent: sp });
     } else {
-      this.onEvent({ type: 'speciation', species: child, parent: sp });
+      this.onEvent({ type: sexualSel ? 'sexualsel' : 'speciation', species: child, parent: sp });
+      this.logSpeciation(child);
+      this.cospeciate(sp, child, [z]);
     }
     return child;
+  }
+
+  // Specialist herbivores: insects (and other land arthropods) may specialise on one plant
+  // species, inheriting their parent's host or switching to another plant growing nearby.
+  chooseHost(parent, grade, trophic, z) {
+    if (!(grade === 'insect' || (grade === 'arthropod' && parent.habitat !== 0)) || trophic !== TROPHIC.GRAZER) return 0;
+    const rng = this.rng;
+    const inherited = parent.host && this.species.get(parent.host)?.died < 0 ? parent.host : 0;
+    if (inherited && rng() < 0.65) return inherited;
+    if (rng() > 0.45) return inherited;
+    const plants = [];
+    for (let a = 0; a < this.presN[z]; a++) {
+      const s = this.pres[z * MAXT + a], q = this.slots[s];
+      if (q && q.kingdom === 'plant' && q.habitat !== 0 && this.B[z * MAXT + s] > 1e-3) plants.push(q);
+    }
+    return plants.length ? plants[Math.floor(rng() * plants.length)].id : inherited;
+  }
+
+  // Cospeciation: when a host plant splits, its specialists often split with it
+  // (the matching family trees of figs and fig wasps are a famous example).
+  cospeciate(parentPlant, childPlant, zones) {
+    if (parentPlant.kingdom !== 'plant' || childPlant.kingdom !== 'plant') return;
+    for (const s of this.alive.slice()) {
+      const q = this.slots[s];
+      if (!q || q.host !== parentPlant.id || this.rng() > 0.35 || this.alive.length >= MAXT - 5) continue;
+      const z = zones.find((zz) => this.B[zz * MAXT + s] > 1e-4) ?? this.pickZone(q);
+      if (z === undefined || z < 0) continue;
+      const kid = this.createSpecies(q.grade, { parent: q.id, habitat: q.habitat, trophic: q.trophic, pref: childPlant.pref, tol: q.tol, n2: childPlant.n2, alt: childPlant.alt, size: q.size, sexual: q.sexual, host: childPlant.id, years: this.years });
+      if (!kid) return;
+      const amt = this.B[z * MAXT + s] * 0.5;
+      this.B[z * MAXT + s] -= amt;
+      this.addB(z, kid.slot, Math.max(amt, 2e-4));
+      kid.cospeciated = true;
+      this.onEvent({ type: 'cospeciation', species: kid, parent: q, host: childPlant });
+    }
+  }
+
+  logSpeciation(sp) {
+    const log = (this.specLog[sp.grade] ||= []);
+    log.push(this.tick);
+    while (log.length && log[0] < this.tick - 150) log.shift();
+    // a burst of new species in one group: an adaptive radiation
+    if (log.length >= 7 && this.tick - (this.radiationNoted[sp.grade] ?? -1e9) > 1500) {
+      this.radiationNoted[sp.grade] = this.tick;
+      this.onEvent({ type: 'radiation', grade: sp.grade, count: log.length });
+    }
   }
 
   // biosphere → planet: vegetation for display and weathering, chemistry consumed

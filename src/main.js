@@ -244,6 +244,7 @@ $('show-clouds').addEventListener('change', (e) => (renderer.showClouds = e.targ
 $('show-atmo').addEventListener('change', (e) => (renderer.atmosphere.visible = e.target.checked));
 $('show-cards').addEventListener('change', (e) => { ui.showCards = e.target.checked; if (!ui.showCards) { ui.cards = []; ui.renderCard(); } });
 $('natural-events').addEventListener('change', (e) => (world.naturalEvents = e.target.checked));
+$('ice-cycles').addEventListener('change', (e) => { world.planet.cycles = e.target.checked; world.planet.updateOrbital(); });
 $('auto-rotate').addEventListener('change', (e) => (renderer.controls.autoRotate = e.target.checked));
 $('btn-random-seed').addEventListener('click', () => ($('seed-input').value = Math.floor(Math.random() * 99999) + 1));
 $('btn-new-world').addEventListener('click', () => newWorld(+$('seed-input').value || 1, $('scenario').value));
@@ -255,6 +256,7 @@ function newWorld(s, sc) {
   world.eco.transitionRate = +$('transitions').value;
   world.naturalEvents = $('natural-events').checked;
   world.tect.speed = +$('drift').value;
+  world.planet.cycles = $('ice-cycles').checked;
   renderer.setWorld(world);
   ui.setWorld(world);
   tree.setWorld(world);

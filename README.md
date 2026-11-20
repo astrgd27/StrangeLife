@@ -75,6 +75,12 @@ Each zone holds the biomass of every species living there:
 ### Evolution
 - **Niches.** Each species has a preferred temperature, rainfall on land or water depth at sea, and altitude on land, each with a tolerance. Desert specialists, rainforest plants, alpine life and deep-sea fish all emerge.
 - **Adaptation.** Each species' niche drifts toward the conditions it actually lives in.
+- **Ice-age cycles.** Orbital (Milankovitch) cycles add a rhythm of glacials and interglacials, strongest on a cool planet. Ranges shrink into refuges and split, a "species pump".
+- **Coevolution.** Insects can specialise on one host plant; when the plant splits, its specialists often split too (cospeciation), so insect diversity tracks plant diversity. Plants with their own specialists get dedicated pollinators.
+- **Ecosystem engineers.** Coral reefs and tall forests add 3D habitat that lets more species coexist in a zone.
+- **Ecological opportunity.** Speciation slows as a niche fills (species in the same niche bin) and surges after mass extinctions, producing adaptive radiations.
+- **Islands.** Hotspot volcanoes build island chains as plates slide over them. Island populations follow the island rule (dwarf elephants, giant lizards). The *Endemics* map view shows species found in few places.
+- **Sexual selection.** In birds, fish and other showy animals, mate choice alone can split a population into new species.
 - **Geographic isolation (allopatric speciation).** When part of a species' range is cut off by an opening sea, a rising mountain range or a band of hostile climate, and stays cut off, it becomes a new species adapted to its own patch. Drifting continents keep making new barriers.
 - **Speciation at range edges.** Stressed populations at the edge of a range also split off as new species with a new temperature niche, diet, habitat or body size. Sexual species split faster. Speciation slows as a niche fills (diversity-dependent diversification), and crowded niches squeeze out their rarest members (competitive exclusion).
 - **Major transitions** are rare events that found new lineages, once the planet allows them:
@@ -134,7 +140,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 ## Ideas for later
 
-See [ROADMAP.md](ROADMAP.md): coevolution, climate cycles and refugia, adaptive radiations into emptied niches, island endemism and sexual selection.
+See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled.
 
 - Methane and an Archean organic haze
 - Civilization once intelligence appears (SimEarth's tech ages)

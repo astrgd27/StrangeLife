@@ -136,6 +136,7 @@ export class Planet {
     this.volcanism = 1;
     this.meanT = 15; this.iceFrac = 0; this.landFrac = 0.3; this.oceanFrac = 0.7; this.landPlantCover = 0;
     this.primaryProduction = 0;
+    this.cycles = true; this.orbital = 0; this.cycleAmp = 0;
     this.landProduction = 0;
     this.generate(seed, scenario);
   }
@@ -260,7 +261,20 @@ export class Planet {
   get greenhouse() { return 5 * Math.log2(Math.max(0.05, this.co2)); }
   get solar() { return (this.sun - 1) * 75; }
   get albedo() { return -16 * Math.max(0, this.iceFrac - 0.12); }
-  get globalShift() { return this.greenhouse + this.solar + this.albedo + this.globalTemp - this.winter; }
+  get globalShift() { return this.greenhouse + this.solar + this.albedo + this.orbital + this.globalTemp - this.winter; }
+
+  // Orbital (Milankovitch) cycles: wobbles in Earth's tilt, orbit shape and axis direction change
+  // how sunlight falls on the planet, pacing ice ages. They matter most on a cool planet with ice
+  // to amplify them. Real periods are ~23, 41 and 100 thousand years; here they're stretched so a
+  // game session sees ice ages come and go.
+  updateOrbital() {
+    if (!this.cycles) { this.orbital = 0; this.cycleAmp = 0; return; }
+    const a = this.age, tau = Math.PI * 2;
+    const amp = 1 + 4 * Math.min(1, Math.max(0, (16 - this.meanT) / 14));
+    const wave = (0.5 * Math.sin((tau * a) / 170) + 0.35 * Math.sin((tau * a) / 260 + 1) + 0.65 * Math.sin((tau * a) / 700 + 2)) / 1.5;
+    this.cycleAmp = amp;
+    this.orbital = amp * wave;
+  }
 
   updateClimate() {
     const { n } = this;
@@ -371,6 +385,7 @@ export class Planet {
   step(tick) {
     if (this.winter > 0) this.winter = Math.max(0, this.winter * 0.985 - 0.005);
     this.stepAtmosphere(tick);
+    if (tick % 6 === 0) this.updateOrbital();
     if (this.climateDirty || tick % 6 === 0) this.updateClimate();
     if (tick % 2 === 0) this.stepChemistry(2);
   }

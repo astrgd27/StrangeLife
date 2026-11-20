@@ -96,7 +96,13 @@ export class World {
       S('arthropod', sea(5, 25)); S('arthropod', sea(5, 25), { trophic: TROPHIC.PREDATOR });
       S('insect', land(10, 30), { habitat: 2 }); S('insect', land(0, 20), { habitat: 2 });
       S('fish', sea(5, 25)); S('fish', sea(5, 25), { trophic: TROPHIC.PREDATOR });
-      for (const sp of E.species.values()) sp.seeded = false;
+      // an established biosphere: every species already occupies the places that suit it, in
+      // a food-chain pyramid (lots of producers, fewer grazers, few predators)
+      for (const sp of E.species.values()) {
+        sp.seeded = false;
+        const amount = sp.trophic === TROPHIC.PHOTO ? 0.08 : sp.trophic === TROPHIC.PREDATOR ? 0.002 : GRADES[sp.grade].tier <= 1 ? 0.01 : 0.006;
+        E.populate(sp, amount);
+      }
       this.setEon(3);
     }
   }
@@ -267,14 +273,25 @@ export class World {
     // supercontinent cycle
     const T = this.tect;
     if (T.moves > 30) {
-      if (!this.supercontinent && T.largestShare > 0.7) {
+      const settled = this.tick - (this.lastSuperEvent ?? -1e9) > 1500; // ignore brief flickers
+      if (!this.supercontinent && T.largestShare > 0.7 && settled) {
+        this.lastSuperEvent = this.tick;
         this.supercontinent = true;
         this.emit({ type: 'milestone', key: 'super-' + this.tick, event: 'supercontinent', text: 'The continents have collided into one supercontinent.' });
-      } else if (this.supercontinent && T.largestShare < 0.45) {
+      } else if (this.supercontinent && T.largestShare < 0.45 && settled) {
+        this.lastSuperEvent = this.tick;
         this.supercontinent = false;
         this.emit({ type: 'milestone', key: 'breakup-' + this.tick, event: 'breakup', text: 'The supercontinent is rifting apart. New oceans open between the pieces.' });
       }
     }
+    // ice-age cycles: announce each glacial period on a cool planet
+    if (P.cycles && P.cycleAmp > 2.5 && !this.glacial && P.orbital < -0.45 * P.cycleAmp) {
+      this.glacial = true;
+      if (this.tick - (this.lastIceAge ?? -1e9) > 600) {
+        this.lastIceAge = this.tick;
+        this.emit({ type: 'milestone', key: 'ice-' + this.tick, event: 'iceage', text: `An ice age begins: orbital cycles cool the planet by ${Math.abs(P.orbital).toFixed(1)} °C and glaciers advance.` });
+      }
+    } else if (this.glacial && P.orbital > 0) this.glacial = false;
     if (P.iceFrac > 0.45 && !this.snowball) { this.snowball = true; this.emit({ type: 'milestone', key: 'snowball-' + this.tick, event: 'snowball', text: 'The planet freezes over: a snowball world.', bad: true }); }
     if (this.snowball && P.iceFrac < 0.2) { this.snowball = false; this.emit({ type: 'milestone', key: 'thaw-' + this.tick, text: 'The ice retreats: the snowball thaws.' }); }
 

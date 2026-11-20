@@ -103,7 +103,7 @@ export class Tectonics {
       this.crust0[c] = e;
       this.plate0[c] = this.label[c];
     }
-    if (erode) this.growContinents();
+    if (erode) { this.growContinents(); this.buildHotspotIslands(); }
     this.uplift.fill(0);
     this.angle.fill(0);
     this.lastMove.fill(0);
@@ -145,6 +145,16 @@ export class Tectonics {
     for (const [c] of cands) {
       if (deficit-- <= 0) break;
       crust[c] = 0.03 + this.rng() * 0.08;
+    }
+  }
+
+  // Hotspot volcanoes pile up islands as a plate slides over them; each island is carried away,
+  // erodes and sinks, leaving a chain (like Hawaii and the Emperor seamounts).
+  buildHotspotIslands() {
+    const crust = this.crust0, hot = this.hotspot;
+    for (let c = 0; c < this.planet.n; c++) {
+      if (hot[c] < 0.6) continue;
+      if (crust[c] < 0.18 && crust[c] > -0.7) crust[c] = Math.min(0.18, crust[c] + 0.12);
     }
   }
 

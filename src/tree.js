@@ -390,7 +390,7 @@ export class TreeView {
       tip.innerHTML = `<b>${G.icon} ${G.name}</b><br>${KINGDOMS[G.kingdom].name} · ${KINGDOMS[G.kingdom].domain}<br>First appeared ${formatYears(W.yearsAt(row.first))}<br>${row.living ? `${row.living} species living now` : 'Extinct'} · ${row.total} species in all<br><span class="muted">Body size ${G.size}</span>`;
     } else {
       const s = row, G = GRADES[s.grade];
-      tip.innerHTML = `<b>${s.icon} <i>${esc(s.name)}</i></b><br>${G.name} · ${TROPHIC_NAMES[s.trophic]} · ${HABITAT_NAMES[s.habitat]}<br>Appeared ${formatYears(W.yearsAt(s.born))}<br>${s.died < 0 ? `Living in ${s.range} zones` : `Extinct ${formatYears(W.yearsAt(s.died))} (peak ${s.peakRange} zones)`}<br><span class="muted">Prefers ${s.pref.toFixed(0)}°C</span>`;
+      tip.innerHTML = `<b>${s.icon} <i>${esc(s.name)}</i></b><br>${G.name} · ${TROPHIC_NAMES[s.trophic]} · ${HABITAT_NAMES[s.habitat]}<br>Appeared ${formatYears(W.yearsAt(s.born))}<br>${s.died < 0 ? `Living in ${s.range} zones` : `Extinct ${formatYears(W.yearsAt(s.died))} (peak ${s.peakRange} zones)`}<br><span class="muted">Prefers ${s.pref.toFixed(0)}°C${s.allopatric ? ' · split off by isolation' : s.display ? ' · split by mate choice' : s.cospeciated ? ' · split with its host plant' : ''}${s.island ? ' · island species' : ''}</span>`;
     }
     tip.hidden = false;
     const pad = 14, tw = tip.offsetWidth, th = tip.offsetHeight;

@@ -363,6 +363,20 @@ export class Renderer {
         if (v > 0.5) { r = r * 0.5 + 0.5; g = g * 0.6 + 0.15; b *= 0.5; }
         out[c * 3] = r; out[c * 3 + 1] = g; out[c * 3 + 2] = b;
       }
+    } else if (this.overlay === 'endemics') {
+      // species found in 15 zones or fewer: islands, mountain tops and isolated basins light up
+      const n = new Uint8Array(E.Z);
+      for (let z = 0; z < E.Z; z++) {
+        for (let a = 0; a < E.presN[z]; a++) {
+          const sp = E.slots[E.pres[z * MAXT + a]];
+          if (sp && sp.range <= 15 && E.B[z * MAXT + sp.slot] > 1e-4) n[z]++;
+        }
+      }
+      for (let c = 0; c < P.n; c++) {
+        const v = Math.min(1, n[E.zoneOf[c]] / 4);
+        const w = P.water[c] ? 0.5 : 1;
+        out[c * 3] = (0.1 + 0.85 * v) * w; out[c * 3 + 1] = (0.1 + 0.35 * v) * w; out[c * 3 + 2] = (0.18 + 0.55 * v) * w;
+      }
     } else if (this.overlay === 'diversity') {
       // number of species per zone
       for (let c = 0; c < P.n; c++) {
