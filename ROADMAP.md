@@ -91,6 +91,14 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
   - `Ecosystem.computeRealms()`: k-means on the lists of complex species in each zone, separately for land and sea, recomputed when the Realms view is shown; each realm is named after its most characteristic species.
   - Map views Currents, Seasons, Realms (and Fire) with legends.
 
+## 14. Looks: what makes each species recognisable
+- **Real:** related species look alike because they inherit their colour patterns, ornaments and proportions; sister species differ in details, and sexual selection (peacocks, birds of paradise, cichlids) makes showy groups split into species that differ mainly in colour and ornaments.
+- **Game:**
+  - Look genes (`LOOK_GENES` in `genome.js`: hue, accent, shade, pattern, patternSize, ornament, ornamentSize, build, snout, reach, tail) don't enter `develop()` or `ecology()`. `mutate()` drifts them freely (pattern and ornament type more slowly) and occasionally resets one; `sexualLooks()` reshuffles colours, markings and ornaments when mate choice splits a species.
+  - `looks(sp)` decodes them: one of seven patterns, an ornament from a per-group list (`ORNAMENTS`; for plants, fungi and microbes the list is of forms), its size scaled by the display gene, and proportions. `describeLooks()` puts it in words; `lookHeritage()` finds how many ancestral species shared the same markings or ornament.
+  - `sprites.js` draws every body plan from body genes and looks: vertebrates and arthropods are laid out in their own units and fitted to the portrait, so long necks, tails and ornaments fit; bodies get outlines, pale bellies, markings and top-lit shading.
+  - Life seeded from nothing gets a random look; saves and zoo creatures from before looks get one from their id.
+
 ## Also built
 - A main menu with a scenario selector, options, load and continue, a pause menu (`menu.js`), and ending a run to take up to three species to the **zoo** (`zoo.js`): enclosures you can feed and play with, and full species profiles with ancestry
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)

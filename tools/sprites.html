@@ -5,33 +5,47 @@
 <title>StrangeLife organism sprites</title>
 <style>
   body { background: #0b1020; color: #cfd8e6; font: 12px system-ui, sans-serif; margin: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, 136px); gap: 10px; }
-  figure { margin: 0; text-align: center; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .row h3 { width: 110px; font-size: 12px; font-weight: 600; margin: 0; }
+  figure { margin: 0; text-align: center; width: 116px; }
+  figcaption { font-size: 10px; color: #8a96aa; height: 26px; overflow: hidden; }
   canvas { background: radial-gradient(circle at 50% 40%, rgba(120,160,220,.16), rgba(8,12,22,.5)); border-radius: 12px; }
 </style>
 </head>
 <body>
-<p>Every kind of organism drawn from its archetype genome (development check: <code>python3 -m http.server</code>, then open <code>/tools/sprites.html</code>). Small versions are shown at globe-icon size.</p>
-<div class="grid" id="g"></div>
+<p>Every kind of organism, from its archetype genome, with several random looks each (development check: <code>python3 -m http.server</code>, then open <code>/tools/sprites.html</code>; add <code>?n=8</code> for more looks, <code>?only=fish</code> for one group). The small circle is globe-icon size.</p>
+<div id="g"></div>
 <script type="module">
-import { GRADE_KEYS, GRADES, previewSpecies } from '../src/ecosystem.js';
+import { GRADE_KEYS, previewSpecies } from '../src/ecosystem.js';
+import { LOOK_GENES, GI, describeLooks } from '../src/genome.js';
 import { drawOrganism } from '../src/sprites.js';
+const q = new URLSearchParams(location.search), N = +q.get('n') || 6, only = q.get('only');
+let seed = +q.get('seed') || 7;
+const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 const g = document.getElementById('g');
-const extra = [['fish', { trophic: 4 }], ['dinosaur', { trophic: 4 }], ['ungulate', { size: 0.9 }], ['carnivoran', { size: 0.7 }], ['flower', { size: 0.2 }], ['waterplant', { habitat: 3 }]];
+const extra = [['fish', { trophic: 4, size: 0.7 }], ['dinosaur', { trophic: 4 }], ['ungulate', { size: 0.9 }], ['flower', { size: 0.2 }], ['amphibian', {}]];
 for (const [grade, opts] of [...GRADE_KEYS.map((k) => [k, {}]), ...extra]) {
-  for (const hue of [0.3]) {
-    const sp = previewSpecies(grade, { ...opts, hue });
+  if (only && grade !== only) continue;
+  const row = document.createElement('div'); row.className = 'row';
+  const h = document.createElement('h3'); row.append(h);
+  for (let i = 0; i < N; i++) {
+    const looks = LOOK_GENES.map(() => rnd());
+    const sp = previewSpecies(grade, { ...opts, looks });
+    if (sp.kingdom === 'animal' && i % 2) sp.genes[GI.display] = 0.8; // alternate drab and showy animals
+    sp.id = 100 + i;
+    h.textContent = grade + (sp.grade !== grade ? ' → ' + sp.grade : '');
     const f = document.createElement('figure');
-    const cv = document.createElement('canvas'); cv.width = cv.height = 128; cv.style.width = cv.style.height = '128px';
-    drawOrganism(cv.getContext('2d'), sp, 64, 64, 54);
+    const cv = document.createElement('canvas'); cv.width = cv.height = 224; cv.style.width = cv.style.height = '112px';
+    drawOrganism(cv.getContext('2d'), sp, 112, 112, 95);
     const sm = document.createElement('canvas'); sm.width = sm.height = 28;
-    const c2 = sm.getContext('2d'); c2.beginPath(); c2.arc(14, 14, 13, 0, 7); c2.fillStyle = 'rgba(8,12,22,.6)'; c2.fill();
-    drawOrganism(c2, sp, 14, 14, 12);
-    f.append(cv, sm);
-    const cap = document.createElement('figcaption'); cap.textContent = `${grade}${sp.grade !== grade ? ' → ' + sp.grade : ''}`; f.append(cap);
-    g.append(f);
+    const c2 = sm.getContext('2d'); c2.beginPath(); c2.arc(14, 14, 13, 0, 7); c2.fillStyle = 'rgba(8,12,22,.6)'; c2.fill(); c2.save(); c2.clip();
+    drawOrganism(c2, sp, 14, 14, 12); c2.restore();
+    const cap = document.createElement('figcaption'); cap.textContent = describeLooks(sp);
+    f.append(cv, sm, cap); row.append(f);
   }
+  g.append(row);
 }
+window.done = true;
 </script>
 </body>
 </html>

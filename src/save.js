@@ -7,9 +7,15 @@
 
 import { World } from './world.js';
 import { Civilization } from './civ.js';
-import { NG, makeGenes, ARCHETYPES } from './genome.js';
+import { NG, GI, makeGenes, randomLooks, ARCHETYPES } from './genome.js';
 
-export const SAVE_VERSION = 3; // 2: species carry genomes; 3: coverings, armour, plant forms, fresh water
+// a small seeded generator, so an old species always gets the same new look
+export function idRng(seed) {
+  let a = (seed * 2654435761 + 12345) >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+export const SAVE_VERSION = 4; // 2: species carry genomes; 3: coverings, armour, plant forms, fresh water; 4: looks
 
 // ---------- encoding helpers ----------
 
@@ -85,7 +91,7 @@ export function serialize(world, meta = {}) {
 
 export function deserialize(data) {
   if (data?.version === 1) throw new Error('This world was saved before genomes existed. Open it in StrangeLife Classic.');
-  if (!data || (data.version !== SAVE_VERSION && data.version !== 2)) throw new Error('This save file is from a different version of StrangeLife.');
+  if (!data || (data.version !== SAVE_VERSION && data.version !== 2 && data.version !== 3)) throw new Error('This save file is from a different version of StrangeLife.');
   // rebuild the same planet from its seed, then overwrite everything that has changed since
   const w = new World(data.seed, { scenario: data.scenario });
   const P = w.planet, T = w.tect, E = w.eco;
@@ -118,8 +124,12 @@ export function deserialize(data) {
     if (sp.genes.length < NG) {
       // a save from before coverings and plant forms: fill in the new genes from the group's archetype
       const base = makeGenes(ARCHETYPES[sp.grade]?.genes || {});
+      // (and a look of its own, from its id, for a save from before looks; hue is kept)
+      const hue = sp.genes[GI.hue];
+      if (sp.genes.length <= GI.accent) randomLooks(base, idRng(sp.id));
       const g = Float32Array.from(base);
       g.set(sp.genes.slice(0, NG));
+      if (sp.genes.length > GI.hue) g[GI.hue] = hue;
       sp.genes = g;
     }
     sp.genes = Float32Array.from(sp.genes);

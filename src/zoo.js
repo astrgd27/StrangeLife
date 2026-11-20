@@ -2,7 +2,9 @@
 // genome, body, ecology, food web, behaviour and ancestry) kept in the browser, so you can visit,
 // feed and play with it, and read its full profile, long after its planet is gone.
 
-import { develop, ecology, describe, makeGenes, GENES, GENE_INFO, GI, NG } from './genome.js';
+import { develop, ecology, describe, describeLooks, lookHeritage, heritageText, colourName, makeGenes, randomLooks, GENES, GENE_INFO, GI, NG, LOOK_GENES } from './genome.js';
+import { palette } from './sprites.js';
+import { idRng } from './save.js';
 import { drawOrganism } from './sprites.js';
 import { GRADES, KINGDOMS, TROPHIC_NAMES, HABITAT_NAMES, MAXT } from './ecosystem.js';
 import { behaviours, probe } from './brain.js';
@@ -27,7 +29,7 @@ function saveZoo(list) {
 const pick = (sp) => ({
   name: sp.name, grade: sp.grade, kingdom: sp.kingdom, domain: sp.domain, mito: !!sp.mito, chloro: !!sp.chloro, lichen: !!sp.lichen,
   habitat: sp.habitat, landAnc: !!sp.landAnc, trophic: sp.trophic, genes: Array.from(sp.genes, (v) => Math.round(v * 1000) / 1000),
-  bornYears: sp.bornYears,
+  bornYears: sp.bornYears, sid: sp.id,
 });
 
 // everything worth keeping about a living species, from the world it lived in
@@ -77,9 +79,12 @@ let fakeId = 1;
 export function revive(snap) {
   const genes = makeGenes({});
   const src = snap.genes || [];
+  const sid = snap.sid ?? [...String(snap.id || snap.name || '')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  // creatures kept before looks existed get a look of their own (the same one every visit)
+  if (src.length <= GI.accent) randomLooks(genes, idRng(sid));
   for (let k = 0; k < Math.min(NG, src.length); k++) genes[k] = src[k];
   const sp = {
-    id: snap._id || (snap._id = fakeId++), genes, domain: snap.domain, mito: snap.mito, chloro: snap.chloro, lichen: snap.lichen,
+    id: sid || (snap._id || (snap._id = fakeId++)), genes, domain: snap.domain, mito: snap.mito, chloro: snap.chloro, lichen: snap.lichen,
     habitat: snap.habitat, landAnc: snap.landAnc, grade: snap.grade, kingdom: snap.kingdom, trophic: snap.trophic, host: 0,
   };
   sp.ph = develop(sp);
@@ -187,7 +192,12 @@ export class ZooView {
     const s = this.list[i], sp = revive(s), ph = sp.ph, eco = sp.eco, G = GRADES[s.grade] || {};
     const gene = (k) => s.genes[GI[k]] ?? 0;
     const bar = (label, v, info) => `<div class="gene" title="${esc(info)}"><span class="gn">${label}</span><span class="gbar"><i style="width:${Math.round(Math.max(0, Math.min(1, v)) * 100)}%"></i></span></div>`;
-    const genes = GENES.filter((k) => k !== 'hue').map((k) => bar(k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()), gene(k), GENE_INFO[k])).join('');
+    const lookSet = new Set(LOOK_GENES);
+    const label = (k) => k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+    const lookBars = LOOK_GENES.filter((k) => k !== 'hue' && k !== 'accent').map((k) => bar(label(k), gene(k), GENE_INFO[k])).join('');
+    const C = palette(sp), col = (f) => colourName(f.h, f.s, f.l);
+    const heritage = lookHeritage(sp, [...s.lineage].reverse().map((a) => ({ ...a, genes: revive(a).genes })));
+    const genes = GENES.filter((k) => !lookSet.has(k)).map((k) => bar(k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()), gene(k), GENE_INFO[k])).join('');
     const diet = { 0: 'chemicals from vents and the primordial soup', 1: 'sunlight (photosynthesis)', 2: 'dead matter (a decomposer)', 3: 'plants and microbes', 4: 'other animals', 5: 'plants and animals alike', 6: `its host${s.host ? `, <i>${esc(s.host.name)}</i>` : ''} (a parasite)` }[s.trophic];
     const life = [];
     if (ph.animal && ph.level === 3) {
@@ -256,6 +266,11 @@ export class ZooView {
           ...(s.lichen ? [['Partnership', 'A fungus farming algae (a lichen)']] : []),
         ])}</dl></section>
       </div>
+      <section><h3>Its looks</h3>
+        <p><span class="swatch" style="background:${C.body}"></span> ${col(C.body)}, <span class="swatch" style="background:${C.accent}"></span> ${col(C.accent)} markings${describeLooks(sp) ? ` · ${esc(describeLooks(sp))}` : ''}</p>
+        ${heritage.length ? `<p class="muted small">${heritageText(heritage, esc)}</p>` : ''}
+        <p class="muted small">Looks are inherited like any other genes but don't affect survival, so they drift from parent to daughter species: relatives share a family look, and mate choice can give a new species new markings and ornaments.</p>
+        <div class="genome looks-genes">${lookBars}</div></section>
       <section><h3>Genome</h3><div class="genome prof-genome">${genes}</div></section>
       <section><h3>Its ancestry: ${path.length > 2 ? `${path.length - 1} changes of body plan` : path.length === 2 ? 'one change of body plan' : 'no change of body plan'} since ${path[0] ? (GRADES[path[0].grade]?.name || path[0].grade).toLowerCase() : 'the beginning'}</h3>
         <ol class="lineage">${lineage}</ol>

@@ -569,3 +569,8 @@ body.at-title .topbar, body.at-title .tools, body.at-title .panel, body.at-title
 
 .overlay-legend { margin: 6px 0 0; line-height: 1.6; }
 .realm-chip { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c); margin-right: 6px; vertical-align: middle; }
+
+/* colour swatches for a species' looks */
+.swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,.18); }
+.looks-genes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 14px; margin-top: 8px; }
+.species-list [data-watch] { grid-column: 1 / 4; justify-self: start; margin-top: 6px; }

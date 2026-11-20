@@ -21,7 +21,7 @@ import { makeGeodesicGrid } from './planet.js';
 import { gaussian } from './rng.js';
 import { genusName, speciesEpithet } from './names.js';
 import { probe } from './brain.js';
-import { FAMILY, GI, ARCHETYPES, develop, classify, ecology, mutate, innovate, evolvable, makeGenes, setDiet, storyKeysFor, describe } from './genome.js';
+import { FAMILY, GI, ARCHETYPES, develop, classify, ecology, mutate, innovate, evolvable, makeGenes, setDiet, storyKeysFor, describe, randomLooks, sexualLooks, LOOK_GENES } from './genome.js';
 
 export const ZONE_LEVEL = 4;
 const MAXT = 160;            // species slots
@@ -355,7 +355,7 @@ export class Ecosystem {
     const parent = opts.parent ? this.species.get(opts.parent) : null;
     const A = ARCHETYPES[grade] || ARCHETYPES.bacteria;
     const genes = opts.genes ? Float32Array.from(opts.genes) : makeGenes(A.genes);
-    if (!opts.genes) genes[GI.hue] = rng();
+    if (!opts.genes) randomLooks(genes, rng);
     const sp = {
       id: this.nextId++, slot, grade, kingdom: GRADES[grade].kingdom,
       domain: opts.domain ?? A.domain, mito: opts.mito ?? A.mito, chloro: opts.chloro ?? A.chloro, lichen: opts.lichen ?? parent?.lichen ?? !!A.lichen,
@@ -527,7 +527,8 @@ export class Ecosystem {
     let genes = opts.genes;
     if (!genes) {
       genes = makeGenes(A.genes);
-      genes[GI.hue] = this.rng();
+      randomLooks(genes, this.rng);
+      if (opts.looks) LOOK_GENES.forEach((k, i) => { genes[GI[k]] = opts.looks[i]; });
       if (opts.trophic !== undefined && G.trophics.includes(opts.trophic)) setDiet(genes, A.domain, opts.trophic);
       if (opts.size !== undefined) genes[GI.size] = Math.max(0.02, Math.min(1, opts.size));
     }
@@ -1190,7 +1191,7 @@ export class Ecosystem {
     if (sexualSel) {
       // speciation by mate choice: same niche, a new courtship display and colours
       genes[GI.display] = Math.min(1, genes[GI.display] + 0.1);
-      genes[GI.hue] = (genes[GI.hue] + 0.15 + 0.2 * rng()) % 1;
+      sexualLooks(genes, rng, gaussian);
     } else if (mode === 'colonise') {
       habitat = 3;
     } else if (mode === 'social') {
@@ -1213,7 +1214,7 @@ export class Ecosystem {
       domain = m.domain ?? domain; mito = m.mito ?? mito; chloro = m.chloro ?? chloro; lichen = m.lichen ?? lichen;
       if (transition.hab !== undefined) habitat = transition.hab;
       if (m.genes) for (const k in m.genes) genes[GI[k]] = m.genes[k];
-      genes[GI.hue] = rng();
+      randomLooks(genes, rng);
     } else if (rng() < 0.2) {
       // move into the neighbouring habitat: sea ↔ coast ↔ land, founded somewhere in the range
       // that has it (a sea creature colonises the shore from a coastal population)
@@ -1596,6 +1597,7 @@ export function previewSpecies(grade, opts = {}) {
   const G = GRADES[grade], A = ARCHETYPES[grade];
   const genes = makeGenes(A.genes);
   genes[GI.hue] = opts.hue ?? 0.5;
+  if (opts.looks) LOOK_GENES.forEach((k, i) => { genes[GI[k]] = opts.looks[i]; });
   if (opts.trophic !== undefined && G.trophics.includes(opts.trophic)) setDiet(genes, A.domain, opts.trophic);
   if (opts.size !== undefined) genes[GI.size] = Math.max(0.02, Math.min(1, opts.size));
   const sp = { id: 1, genes, domain: A.domain, mito: A.mito, chloro: A.chloro, lichen: !!A.lichen, habitat: opts.habitat ?? G.habitats[0], landAnc: LAND_GROUPS.has(grade) };

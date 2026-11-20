@@ -12,7 +12,11 @@ export const GENES = [
   'symmetry', 'segments', 'limbs', 'skeleton', 'vascular', 'landAdapt', 'endothermy', 'brain',
   'wings', 'display', 'hue', 'covering', 'armour', 'succulence', 'climbing', 'parasitism', 'symbiosis',
   'toxins', 'care', 'metamorphosis', 'sociality', 'migration',
+  // looks: heritable, but with no effect on survival (like hue). They drift between species, so
+  // relatives share a family look, and sexual selection reshuffles them
+  'accent', 'shade', 'pattern', 'patternSize', 'ornament', 'ornamentSize', 'build', 'snout', 'reach', 'tail',
 ];
+export const LOOK_GENES = ['hue', 'accent', 'shade', 'pattern', 'patternSize', 'ornament', 'ornamentSize', 'build', 'snout', 'reach', 'tail'];
 export const NG = GENES.length;
 export const GI = Object.fromEntries(GENES.map((g, i) => [g, i]));
 
@@ -47,6 +51,16 @@ export const GENE_INFO = {
   metamorphosis: 'Young (larvae, tadpoles) live a different life from the adults',
   sociality: 'Lives in colonies with workers and queens (insects), or in herds and packs',
   migration: 'Travels with the seasons to escape winters and follow food',
+  accent: 'Second colour, for markings and ornaments (looks only)',
+  shade: 'Dark or pale colouring (looks only)',
+  pattern: 'Markings: plain, spots, stripes, bands, mottling, a dark back, eyespots (looks only)',
+  patternSize: 'Fine or bold markings (looks only)',
+  ornament: 'Which ornament: crests, horns, frills, plumes, sails… (looks only)',
+  ornamentSize: 'How big the ornament grows; showy species grow bigger ones (looks only)',
+  build: 'Slender or stout build; in plants, the shape of the crown (looks only)',
+  snout: 'Short face or long snout, beak or jaws (looks only)',
+  reach: 'Short or long legs, neck and antennae (looks only)',
+  tail: 'Short or long tail (looks only)',
 };
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -60,7 +74,139 @@ export function makeGenes(obj = {}) {
   // life-history genes start part-way, so one big change can tip a lineage over
   for (const [k, v] of [['toxins', 0.15], ['care', 0.2], ['metamorphosis', 0.2], ['sociality', 0.2], ['migration', 0.15]]) if (obj[k] === undefined) g[GI[k]] = v;
   if (obj.hue === undefined) g[GI.hue] = 0.5;
+  for (const k of LOOK_GENES) if (k !== 'hue' && obj[k] === undefined) g[GI[k]] = 0.5;
   return g;
+}
+
+// a fresh, random look (for life seeded from nothing, or a new lineage made by a merger)
+export function randomLooks(genes, rng) {
+  for (const k of LOOK_GENES) genes[GI[k]] = rng();
+  return genes;
+}
+
+// ---------- looks ----------
+
+// Markings, in gene order. Ornaments (or, for plants, fungi and microbes, the form they take)
+// depend on the body plan: the same gene grows a crest on a bird and antlers on a deer.
+export const PATTERNS = ['plain', 'spots', 'stripes', 'bands', 'mottled', 'dark back', 'eyespots'];
+const PAT_EDGES = [0.2, 0.34, 0.48, 0.6, 0.72, 0.86];
+export const ORNAMENTS = {
+  fish: ['a sail fin', 'streamer fins', 'barbels', 'spiny fins', 'a sword', 'a lure'],
+  whale: ['a tall fin', 'long flippers', 'a tusk', 'a hump'],
+  amphibian: ['a crest', 'warts', 'frilly gills', 'horns', 'a throat sac'],
+  reptile: ['a frill', 'a back sail', 'horns', 'spines', 'a crest', 'a dewlap'],
+  dinosaur: ['a frill', 'a back sail', 'horns', 'back plates', 'a crest', 'a tail club'],
+  crocodile: ['a nose knob', 'back spines', 'a crest'],
+  snake: ['a hood', 'horns', 'a rattle', 'a crest'],
+  turtle: ['a high dome', 'a ridged shell', 'a spiky shell', 'a flat shell'],
+  pterosaur: ['a sail crest', 'a blade crest', 'a throat pouch'],
+  bird: ['a crest', 'long tail plumes', 'a wattle', 'a fan tail', 'head plumes', 'a casque'],
+  mammal: ['big ears', 'quills', 'a tufted tail', 'a crest', 'a trunk'],
+  rodent: ['big ears', 'long whiskers', 'a bushy tail', 'quills'],
+  carnivoran: ['a mane', 'tufted ears', 'a bushy tail', 'long whiskers', 'sabre teeth'],
+  ungulate: ['antlers', 'spiral horns', 'curved horns', 'a nose horn', 'a hump', 'a mane'],
+  primate: ['a beard', 'a mane', 'a bright face', 'a crest'],
+  bat: ['big ears', 'a nose leaf', 'a mane'],
+  sapient: ['a crest', 'long hair', 'body paint'],
+  insect: ['horns', 'long antennae', 'feathery antennae', 'wing eyespots', 'tail filaments', 'big jaws'],
+  socialinsect: ['big jaws', 'long antennae', 'a stinger'],
+  arachnid: ['pincers', 'a tail sting', 'hairy legs', 'long legs'],
+  myriapod: ['long antennae', 'bright legs', 'spines'],
+  arthropod: ['big claws', 'long antennae', 'spines', 'a tail fan', 'a horned shield'],
+  mollusc: ['a tall spire', 'a flat coil', 'a cone shell', 'two valves', 'a spiny shell'],
+  squid: ['long tentacles', 'frilly fins', 'eight arms', 'a crest'],
+  worm: ['bristles', 'feathery gills', 'frills', 'tentacles'],
+  jelly: ['frilly arms', 'long tentacles', 'a crested bell', 'comb rows'],
+  // forms rather than ornaments: always shown
+  sponge: ['a vase', 'branches', 'a fan', 'a brain shape', 'tubes'],
+  starfish: ['five arms', 'many arms', 'an urchin', 'thin arms'],
+  flower: ['daisy flowers', 'bell flowers', 'flower spikes', 'flower clusters', 'cup flowers'],
+  conifer: ['big cones', 'small cones', 'drooping needles'],
+  fern: ['fiddleheads', 'lacy fronds', 'broad fronds'],
+  grass: ['feathery plumes', 'seed spikes', 'tufts', 'canes'],
+  cactus: ['a column', 'a barrel', 'pads', 'a candelabra'],
+  vine: ['heart-shaped leaves', 'lobed leaves', 'trumpet flowers'],
+  moss: ['spore capsules', 'star moss', 'feathery moss'],
+  seaweed: ['kelp blades', 'air bladders', 'frilly red fronds', 'branching fronds'],
+  waterplant: ['lily pads', 'reeds', 'floating rosettes'],
+  mushroom: ['a dome cap', 'a flat cap', 'a pointed cap', 'brackets', 'a puffball', 'coral branches'],
+  fungi: ['threads', 'tufts'],
+  lichen: ['crusts', 'leafy lobes', 'shrubby tufts', 'beards'],
+  protist: ['an amoeba', 'a ciliate', 'a flagellate', 'a spiky shell', 'a stalk'],
+  algae: ['a flagellate', 'a desmid', 'a ball colony'],
+  diatom: ['round boxes', 'boat shapes', 'star chains'],
+  foram: ['a spiral', 'a star', 'a chain'],
+  bacteria: ['rods', 'spheres', 'spirals', 'commas'],
+  archaea: ['lobed cells', 'squares', 'rods'],
+  cyano: ['filaments', 'spheres', 'mats'],
+};
+const FORMS = new Set(['sponge', 'starfish', 'flower', 'conifer', 'fern', 'grass', 'cactus', 'vine', 'moss', 'seaweed', 'waterplant', 'mushroom', 'fungi', 'lichen', 'protist', 'algae', 'diatom', 'foram', 'bacteria', 'archaea', 'cyano']);
+
+// decode a species' look genes into what it looks like
+export function looks(sp) {
+  const g = sp.genes, G = (k) => g[GI[k]];
+  let pi = PAT_EDGES.findIndex((e) => G('pattern') < e);
+  if (pi < 0) pi = PATTERNS.length - 1;
+  const list = ORNAMENTS[sp.grade] || null;
+  const oi = list ? Math.min(list.length - 1, Math.floor(G('ornament') * list.length)) : -1;
+  const form = FORMS.has(sp.grade);
+  // showy species grow bigger ornaments
+  const orn = form ? 1 : G('ornamentSize') * (0.45 + 0.55 * G('display'));
+  return {
+    pattern: PATTERNS[pi], pat: pi, patSize: G('patternSize'),
+    ornament: list && (form || orn > 0.2) ? list[oi] : null, oi: list && (form || orn > 0.2) ? oi : -1, orn, form,
+    build: G('build'), snout: G('snout'), reach: G('reach'), tail: G('tail'),
+    hue: G('hue'), accent: G('accent'), shade: G('shade'), showy: G('display') > 0.55,
+  };
+}
+
+// How far back a species' markings and ornament go in its lineage. `chain` is its ancestors,
+// nearest first. Returns, for each, how many ancestral species shared it (0: new in this one).
+export function lookHeritage(sp, chain) {
+  const L = looks(sp), out = [];
+  for (const key of ['pattern', 'ornament']) {
+    const mine = L[key];
+    if (!mine || mine === 'plain') continue;
+    let n = 0, from = null;
+    for (const a of chain) {
+      if (!a?.genes || a.genes.length <= GI.accent || a.grade !== sp.grade) break;
+      if (looks(a)[key] !== mine) break;
+      n++; from = a;
+    }
+    out.push({ key, what: key === 'pattern' ? (mine === 'dark back' ? 'dark back' : mine) : mine.replace(/^an? /, ''), n, from });
+  }
+  return out;
+}
+export function heritageText(h, esc = (x) => x) {
+  return h.map((x) => `${x.what.charAt(0).toUpperCase() + x.what.slice(1)}: ${x.n ? `inherited, shared by ${x.n} ancestral species back to <i>${esc(x.from.name)}</i>` : 'new in this species'}`).join('<br>');
+}
+
+const COLOUR_NAMES = [[0.03, 'red'], [0.08, 'orange'], [0.14, 'golden'], [0.2, 'yellow'], [0.3, 'lime'], [0.42, 'green'], [0.5, 'teal'], [0.58, 'sky-blue'], [0.68, 'blue'], [0.76, 'violet'], [0.86, 'purple'], [0.95, 'pink'], [1.01, 'red']];
+export function colourName(h, s = 0.6, l = 0.5) {
+  if (l < 0.18) return 'black';
+  if (s < 0.18) return l > 0.75 ? 'white' : l > 0.45 ? 'grey' : 'charcoal';
+  const n = COLOUR_NAMES.find(([e]) => h < e)[1];
+  if ((n === 'orange' || n === 'golden' || n === 'red') && s < 0.5) return l > 0.6 ? 'sandy' : l > 0.38 ? 'brown' : 'dark brown';
+  return l > 0.68 ? `pale ${n}` : l < 0.3 ? `dark ${n}` : n;
+}
+
+// a naturalist's description of its looks
+export function describeLooks(sp) {
+  const L = looks(sp), ph = sp.ph || {}, parts = [];
+  if (ph.animal && ph.level === 3) {
+    if (L.build < 0.25) parts.push('slender'); else if (L.build > 0.75) parts.push('stout');
+    if (ph.skeleton === 'endo' && sp.grade !== 'snake') {
+      if (L.snout > 0.75) parts.push(sp.grade === 'bird' ? 'long-billed' : 'long-snouted'); else if (L.snout < 0.22) parts.push(sp.grade === 'bird' ? 'stubby-billed' : 'short-faced');
+      if (ph.limbs && L.reach > 0.75) parts.push('long-legged'); else if (ph.limbs && L.reach < 0.2) parts.push('short-legged');
+      if (L.tail > 0.78) parts.push('long-tailed');
+    } else if (ph.skeleton === 'exo' && ph.limbs && L.reach > 0.75) parts.push('long-legged');
+  }
+  if (L.pattern !== 'plain' && (ph.animal || sp.grade === 'mushroom')) parts.push(`${L.patSize > 0.65 ? 'bold ' : L.patSize < 0.3 ? 'fine ' : ''}${L.pattern === 'dark back' ? 'dark-backed' : L.pattern}`);
+  if (L.ornament) {
+    const o = L.ornament.replace(/^an? /, '');
+    parts.push(L.form ? L.ornament : L.orn > 0.55 && !/^(big|long|tall|high) /.test(o) ? `big ${o}` : o);
+  }
+  return parts.join(' · ');
 }
 
 // ---------- development: genome → body ----------
@@ -358,13 +504,27 @@ export function ecology(sp, ph) {
 export function mutate(genes, rng, gaussian, rate = 1, ev = null) {
   const g = Float32Array.from(genes);
   for (let k = 0; k < NG; k++) {
-    if (k === GI.hue) { g[k] = (((g[k] + gaussian(rng) * 0.02) % 1) + 1) % 1; continue; }
+    if (k === GI.hue || k === GI.accent) { g[k] = (((g[k] + gaussian(rng) * 0.035) % 1) + 1) % 1; continue; }
+    // looks drift freely; which pattern and ornament a lineage has drift more slowly, so a whole
+    // family shares them
+    if (LOOK_SET.has(k)) { g[k] = clamp01(g[k] + gaussian(rng) * (k === GI.pattern || k === GI.ornament ? 0.03 : 0.06)); continue; }
     // genes the body doesn't use yet stay in their ground state: no hidden drift that would let a
     // finished insect body spring from a single cell
     const free = !ev || ev[GENES[k]] ? 1 : 0.02;
     g[k] = clamp01(g[k] + gaussian(rng) * 0.035 * rate * free);
   }
+  // now and then a new look appears in one step (a new pattern or ornament)
+  if (rng() < 0.08) { const k = GI[LOOK_GENES[1 + Math.floor(rng() * (LOOK_GENES.length - 1))]]; g[k] = rng(); }
   return g;
+}
+const LOOK_SET = new Set(LOOK_GENES.map((k) => GI[k]));
+
+// a new look picked by mate choice: new markings, colours and ornaments, same body
+export function sexualLooks(g, rng, gaussian) {
+  g[GI.hue] = (g[GI.hue] + 0.15 + 0.2 * rng()) % 1;
+  g[GI.accent] = (((g[GI.accent] + gaussian(rng) * 0.2) % 1) + 1) % 1;
+  for (const k of ['pattern', 'ornament']) g[GI[k]] = clamp01(g[GI[k]] + gaussian(rng) * 0.15);
+  for (const k of ['ornamentSize', 'patternSize']) g[GI[k]] = clamp01(g[GI[k]] + 0.05 + gaussian(rng) * 0.12);
 }
 
 // ---------- developmental innovation ----------

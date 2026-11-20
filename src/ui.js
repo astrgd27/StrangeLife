@@ -4,10 +4,10 @@ import { GRADES, KINGDOMS, KINGDOM_KEYS, TROPHIC_NAMES, HABITAT_NAMES, MAXT } fr
 import { EONS, formatYears } from './world.js';
 import { STORY, EVENTS, storyByKey } from './science.js';
 import { CIV_STAGES } from './civ.js';
-import { spriteURL } from './sprites.js';
+import { spriteURL, palette } from './sprites.js';
 import { behaviours } from './brain.js';
 import { dietOf } from './microcosm.js';
-import { GENES, GENE_INFO, GI } from './genome.js';
+import { GENES, GENE_INFO, GI, describeLooks, lookHeritage, heritageText } from './genome.js';
 
 // the genes worth showing for each kind of body (others are switched off or don't matter)
 const GENE_LABELS = {
@@ -25,6 +25,17 @@ function shownGenes(sp) {
   if (ph.fungus) return ['adhesion', 'differentiation', 'absorb', 'landAdapt', 'size'];
   if (ph.level === 2) return ['adhesion', 'differentiation', 'symmetry', 'motility', 'carnivory', 'size'];
   return ['symmetry', 'segments', 'limbs', 'skeleton', 'size', 'motility', 'landAdapt', 'endothermy', 'brain', 'wings', 'carnivory', 'display'];
+}
+// colours, markings and ornaments, and how far back in its family they go
+export function swatches(sp) {
+  const C = palette(sp);
+  return `<span class="swatch" style="background:${C.body}"></span><span class="swatch" style="background:${C.accent}"></span>`;
+}
+function looksHTML(sp, E) {
+  const chain = [];
+  for (let a = sp.parent ? E.species.get(sp.parent) : null; a && chain.length < 80; a = a.parent ? E.species.get(a.parent) : null) chain.push(a);
+  const h = lookHeritage(sp, chain);
+  return `${swatches(sp)} ${esc(describeLooks(sp) || 'plain')}${h.length ? `<br><span class="muted small">${heritageText(h, esc)}</span>` : ''}`;
 }
 function genomeHTML(sp) {
   return `<div class="genome">${shownGenes(sp).map((k) => {
@@ -323,6 +334,7 @@ export class UI {
         detail = `<div class="sp-body">${portrait(sp, 84)}<div><div class="sp-plan">${esc(sp.body || '')}</div>${genomeHTML(sp)}</div></div>
         <dl class="sp-detail">
           <dt>Looks like</dt><dd>${G.name} · ${KINGDOMS[sp.kingdom].domain}${origins > 1 ? ` <span class="muted">(evolved ${origins} separate times)</span>` : ''}</dd>
+          <dt>Appearance</dt><dd>${looksHTML(sp, E)}</dd>
           <dt>Cells</dt><dd>${sp.domain === 'eukaryote' ? `Complex cells${sp.mito ? ', mitochondria' : ''}${sp.chloro ? ', chloroplasts' : ''}` : 'Simple cells (no nucleus)'}</dd>
           <dt>Appeared</dt><dd>${formatYears(sp.bornYears)}${parent ? ` from <i>${esc(parent.name)}</i>` : ''}</dd>
           <dt>Range</dt><dd>${sp.range} zones (peak ${sp.peakRange})</dd>

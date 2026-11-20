@@ -9,6 +9,7 @@ import { ZoneView } from './zoneview.js';
 import { FoodWebView } from './foodweb.js';
 import { GRADES, GRADE_KEYS, MAXT, previewSpecies } from './ecosystem.js';
 import { drawOrganism } from './sprites.js';
+import { LOOK_GENES } from './genome.js';
 import { SLOTS, listSaves, saveToSlot, loadFromSlot, exportWorld, importWorld, describeSave } from './storage.js';
 import { GameMenu, applySavedOptions } from './menu.js';
 import { ZooView, snapshot, addToZoo } from './zoo.js';
@@ -116,10 +117,14 @@ function refreshDesignerLabels() {
   $('d-n2-label').textContent = +$('d-habitat').value === 0 ? 'Water depth (shallow → deep)' : 'Rainfall (desert → rainforest)';
   drawPreview();
 }
+// the look (colours, markings, ornaments) of the next organism seeded: shown in the preview
+const rollLook = () => LOOK_GENES.map(() => Math.random());
+let designLook = rollLook();
+$('d-reroll').addEventListener('click', () => { designLook = rollLook(); drawPreview(); });
 // show the body the chosen genome will build
 function drawPreview() {
   const g = $('seed-preset').value, open = $('designer').open;
-  const sp = previewSpecies(g, open ? { trophic: +$('d-trophic').value, habitat: +$('d-habitat').value, size: +$('d-size').value } : {});
+  const sp = previewSpecies(g, open ? { trophic: +$('d-trophic').value, habitat: +$('d-habitat').value, size: +$('d-size').value, looks: designLook } : { looks: designLook });
   const cv = $('d-preview'), ctx = cv.getContext('2d');
   ctx.clearRect(0, 0, cv.width, cv.height);
   drawOrganism(ctx, sp, 64, 64, 54);
@@ -130,8 +135,8 @@ $('seed-preset').addEventListener('change', refreshDesigner);
 $('designer').addEventListener('toggle', drawPreview);
 refreshDesigner();
 function designerOptions() {
-  if (!$('designer').open) return { seeded: true };
-  const o = { seeded: true, trophic: +$('d-trophic').value, habitat: +$('d-habitat').value, size: +$('d-size').value };
+  if (!$('designer').open) return { seeded: true, looks: designLook };
+  const o = { seeded: true, looks: designLook, trophic: +$('d-trophic').value, habitat: +$('d-habitat').value, size: +$('d-size').value };
   if (!$('d-adapt').checked) { o.pref = +$('d-temp').value; o.n2 = +$('d-n2').value; }
   const name = $('d-name').value.trim();
   if (name) o.name = name;
@@ -230,6 +235,7 @@ function click(x, y, pointerType) {
     else ui.toast(`You seeded ${sp.icon} ${sp.name} (${GRADES[sp.grade].name.toLowerCase()}).`, 'star');
     ui.chronicle(world.tick, `${sp.icon} ${sp.name} was seeded onto the planet.`);
     renderer.updateIcons();
+    designLook = rollLook(); drawPreview();
   } else if (tool === 'meteor') {
     renderer.launchMeteor(cell, () => {
       world.asteroid(cell);

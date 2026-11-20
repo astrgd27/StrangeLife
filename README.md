@@ -4,7 +4,7 @@ A planet-scale evolution sandbox that runs in the browser, inspired by SimEarth,
 
 You start with a newborn planet: scalding seas under a thick CO₂ sky, a dim young Sun, comets raining down, and no life at all. Make it habitable, or wait for it to cool on its own, until chemistry in a warm, organic-rich shallow sea produces the first cell. Then watch life spread across the globe and branch into every domain: Bacteria, Archaea, protists, algae and plants, fungi, and animals. Oxygen from photosynthesis rusts the oceans and then fills the sky. An ozone layer forms, plants creep onto land, and animals follow, all the way to intelligence.
 
-Every species carries a **genome that builds its body**. Cells, symmetry, segments, legs, shells, bones, wings and brains come from genes, and each species is drawn from its own genome on the globe and in the tree of life. New body plans appear when mutations produce them and survive only if the planet rewards them, so every world grows its own tree of life. Groups can evolve more than once, from different ancestors, or never.
+Every species carries a **genome that builds its body**. Cells, symmetry, segments, legs, shells, bones, wings and brains come from genes, and each species is drawn from its own genome on the globe and in the tree of life. New body plans appear when mutations produce them and survive only if the planet rewards them, so every world grows its own tree of life. Groups can evolve more than once, from different ancestors, or never. Species also inherit **looks**: colours, markings, ornaments and proportions that are passed down and drift, so relatives share a family look and every species is recognisably its own.
 
 **Go in close.** Click a zone, then *Go in close* (or press `Z`, or *Watch it up close* on any animal in the Life list). The zone's animals become individuals, each with a tiny brain: a neural network it inherits, with mutations, from its parents. They smell out food, stalk prey, flee predators, find mates, breed and die, so behaviour evolves while you watch: foraging, hunting, escape, and herds or schools where crowds confuse predators. Follow any creature to see its brain fire. When you go back to the planet, each species keeps what it learned, and it feeds and survives better everywhere.
 
@@ -51,7 +51,7 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 
 The **🌳 Tree of life** button (or `T`) opens a full-screen view. *Major groups* is a spindle diagram: each group's thickness over time is how many species it had. *Species* is the full phylogeny, which you can filter by kingdom or group and zoom in time. Living species are named at the tips.
 
-**Seed life** (`-`) can release any kind of organism, with a preview of the body its genome builds. *Customise* lets you pick its diet, habitat, body size, climate and rainfall (or water depth), and name it.
+**Seed life** (`-`) can release any kind of organism, with a preview of the body its genome builds. Each one gets its own look; *🎲 New look* rolls another. *Customise* lets you pick its diet, habitat, body size, climate and rainfall (or water depth), and name it.
 
 **The zoo.** Whenever you end a run (pause menu → *End run…*), you can take up to three living species home to your zoo. It is kept in your browser across runs. In the zoo you can:
 
@@ -63,7 +63,7 @@ The **🌳 Tree of life** button (or `T`) opens a full-screen view. *Major group
 
 The panel on the right has four tabs:
 
-- **Life** lists living species grouped by kingdom. Click one to light up its range on the globe and see its portrait, body plan and genome.
+- **Life** lists living species grouped by kingdom. Click one to light up its range on the globe and see its portrait, body plan, genome and appearance (with how far back its markings and ornaments go in its family).
 - **Planet** shows the current eon, atmosphere gauges, and *the story of life*: a checklist of major transitions that shows the next goal and what it needs.
 - **History** charts species per kingdom, oxygen, CO₂ and temperature, plus a chronicle of events.
 - **World** holds map views, climate and evolution sliders, display options, and new-world generation.
@@ -129,6 +129,7 @@ Each zone holds the biomass of every species living there:
   - **Body plan:** radial or bilateral, segments, limb pairs, shell, soft body or backbone, flight, warm blood, brain.
   - **Ecology follows from the body:** oxygen need, growth, feeding, metabolism (Kleiber scaling), dispersal, climate tolerance, drought, and how hard it is to catch (size, armour, speed and wings protect prey, and predators take the easiest prey first).
 - **Groups emerge.** "Fish", "insects" or "conifers" are just the nearest description of what evolved (`classify`), shown with each species' own procedurally drawn portrait (`sprites.js`). A group can evolve several times from different ancestors (**convergent evolution**), or never.
+- **Looks are inherited.** Ten look genes (a second colour, light or dark, markings, how bold they are, an ornament and its size, build, snout, reach and tail) have no effect on survival, like neutral DNA. They drift a little at each speciation, and now and then jump, so a family shares its markings and ornaments while each species differs in shade and proportions. What an ornament gene grows depends on the body: a crest on a bird, antlers on a deer, a sail on a fish, horns on a beetle. Showy species (the display gene) grow bigger ornaments, and when mate choice splits a species, the new one gets new colours, markings and ornaments. For plants, fungi and microbes the same genes set the form: crown shape, flower type, cap shape, cell shape.
 - **Earth's familiar groups.** About 50 kinds of life can evolve:
   - **Microbes and plankton:** bacteria, archaea, protists, diatoms (glass shells), forams (chalk shells).
   - **Plants:** algae, seaweeds, mosses, ferns, conifers, flowering plants, grasses, cacti, vines and epiphytes, water plants.
@@ -177,7 +178,7 @@ src/rng.js          seeded RNG + 3D Perlin noise
 src/planet.js       geodesic grid, terrain, climate, winds, currents, seasons, rivers and lakes, carbon cycle, oxygen, prebiotic chemistry
 src/tectonics.js    plate tectonics: drifting plates, mountain building, rifts, supercontinent cycles
 src/genome.js       genes, development (genome → body), naming what evolved, ecology from the body, innovations
-src/sprites.js      procedural organism portraits drawn from each species' genome
+src/sprites.js      procedural organism portraits drawn from each species' genome and looks
 src/brain.js        tiny evolving neural-network brains, and reading behaviour from them
 src/microcosm.js    one zone simulated as individual animals with brains
 src/zoneview.js     the up-close view of a zone
@@ -196,7 +197,7 @@ src/menu.js         main menu, scenarios, options, pause menu, ending a run
 src/zoo.js          the zoo: species snapshots, enclosures, full species profiles
 src/main.js         bootstrap, tools, input, game loop
 tools/headless.mjs  run the simulation in Node without graphics
-tools/sprites.html  a sheet of every kind of organism, for checking the drawings
+tools/sprites.html  a sheet of every kind of organism with several random looks each, for checking the drawings
 tools/microcosm.mjs run one zone of individuals headless and report how behaviour evolved
 classic/            StrangeLife Classic, the original version with a fixed ladder of transitions
 vendor/             three.js r160 + OrbitControls (MIT)
