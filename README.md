@@ -51,6 +51,12 @@ Everything below emerges from the simulation. Nothing is scripted to happen at a
 - **Carbon–silicate cycle.** Volcanoes add CO₂. Rock weathering removes it, faster when it's warm, wet and plant-covered. This thermostat cools the scalding early planet over a few hundred million years, and land plants cool it further.
 - **Ice–albedo feedback.** Ice reflects sunlight, so the planet can tip into a **snowball** state. It escapes when volcanic CO₂ builds up.
 - **Water delivery.** Volcanic outgassing and icy comets fill the ocean basins over time.
+- **Plate tectonics.** About ten plates drift at 1–8 cm/yr:
+  - Collisions raise mountain ranges and volcanic arcs.
+  - Rifts open new ocean floor, with hydrothermal vents along the ridges.
+  - Colliding plates swing onto new courses, arcs grow new continental crust, mountains erode, and old sea floor sinks.
+  - Supercontinents assemble and break apart over hundreds of millions of years.
+  - The *Plates* map view shows the plates and volcanic belts.
 
 ### The origin of life (abiogenesis)
 - **Making organic molecules.** Hydrothermal **vents**, **lightning** in an oxygen-free sky (the Miller–Urey experiment), and **comets** all supply them.
@@ -67,8 +73,10 @@ Each zone holds the biomass of every species living there:
 - **Dispersal.** A share of every population spreads to neighbouring zones with suitable habitat. That's how life visibly spreads across the map.
 
 ### Evolution
-- **Adaptation.** Each species' preferred temperature drifts toward the climates it actually lives in.
-- **Speciation.** Stressed populations at the edge of a range split off as new species with a new temperature niche, diet, habitat or body size. Sexual species split faster. Speciation slows as a niche fills (diversity-dependent diversification), and crowded niches squeeze out their rarest members (competitive exclusion).
+- **Niches.** Each species has a preferred temperature, rainfall on land or water depth at sea, and altitude on land, each with a tolerance. Desert specialists, rainforest plants, alpine life and deep-sea fish all emerge.
+- **Adaptation.** Each species' niche drifts toward the conditions it actually lives in.
+- **Geographic isolation (allopatric speciation).** When part of a species' range is cut off by an opening sea, a rising mountain range or a band of hostile climate, and stays cut off, it becomes a new species adapted to its own patch. Drifting continents keep making new barriers.
+- **Speciation at range edges.** Stressed populations at the edge of a range also split off as new species with a new temperature niche, diet, habitat or body size. Sexual species split faster. Speciation slows as a niche fills (diversity-dependent diversification), and crowded niches squeeze out their rarest members (competitive exclusion).
 - **Major transitions** are rare events that found new lineages, once the planet allows them:
 
 | Transition | What it needs |
@@ -103,7 +111,8 @@ index.html          page shell and UI markup
 style.css           styles
 src/rng.js          seeded RNG + 3D Perlin noise
 src/planet.js       geodesic grid, terrain, climate, carbon cycle, oxygen, prebiotic chemistry
-src/ecosystem.js    zones, species, population ecology, dispersal, speciation, major transitions
+src/tectonics.js    plate tectonics: drifting plates, mountain building, rifts, supercontinent cycles
+src/ecosystem.js    zones, species, niches, population ecology, dispersal, speciation, major transitions
 src/world.js        planet + ecosystem, abiogenesis, eons, natural events, history, milestones
 src/science.js      the story of life: real-science notes for each transition
 src/names.js        procedural Latin names, styled by group
@@ -125,7 +134,8 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 ## Ideas for later
 
-- Plate tectonics and continental drift (and the supercontinent cycle)
+See [ROADMAP.md](ROADMAP.md): coevolution, climate cycles and refugia, adaptive radiations into emptied niches, island endemism and sexual selection.
+
 - Methane and an Archean organic haze
 - Civilization once intelligence appears (SimEarth's tech ages)
 - Saving and loading worlds

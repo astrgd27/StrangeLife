@@ -232,6 +232,7 @@ const refreshSea = bindRange('sea-level', 'out-sea', seaFmt, (v) => {
 });
 const refreshMut = bindRange('mutation', 'out-mut', (v) => `${v.toFixed(1)}×`, (v) => { world.eco.mutationRate = v; });
 const refreshTrans = bindRange('transitions', 'out-trans', (v) => `${v.toFixed(1)}×`, (v) => { world.eco.transitionRate = v; });
+const refreshDrift = bindRange('drift', 'out-drift', (v) => (v === 0 ? 'off' : `${v.toFixed(1)}×`), (v) => { world.tect.speed = v; });
 
 document.querySelectorAll('#overlay-seg button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('#overlay-seg button').forEach((x) => x.classList.toggle('active', x === b));
@@ -253,12 +254,13 @@ function newWorld(s, sc) {
   world.eco.mutationRate = +$('mutation').value;
   world.eco.transitionRate = +$('transitions').value;
   world.naturalEvents = $('natural-events').checked;
+  world.tect.speed = +$('drift').value;
   renderer.setWorld(world);
   ui.setWorld(world);
   tree.setWorld(world);
   $('greenhouse').value = 0;
   $('sea-level').value = world.planet.seaLevel;
-  refreshGreenhouse(); refreshSea(); refreshMut(); refreshTrans();
+  refreshGreenhouse(); refreshSea(); refreshMut(); refreshTrans(); refreshDrift();
   ui.toast(`A new world forms (seed ${seed}).`, 'star');
   try { history.replaceState(null, '', `?seed=${seed}&start=${scenario}`); } catch { /* sandboxed */ }
 }
@@ -275,13 +277,15 @@ let last = performance.now();
 let acc = 0;
 let ticksSinceRefresh = 0;
 let lastSea = world.planet.seaLevel;
+let lastTerrain = world.planet.terrainVersion;
 
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   acc += dt * SPEEDS[speed];
   const t0 = performance.now();
-  while (acc >= 1 && performance.now() - t0 < 14) {
+  const budget = speed >= 4 ? 22 : 14; // ms of simulation per frame
+  while (acc >= 1 && performance.now() - t0 < budget) {
     world.step();
     acc -= 1;
     ticksSinceRefresh++;
@@ -291,11 +295,11 @@ function frame(now) {
   if (painting && hoverCell >= 0) applyPaint(hoverCell, dt);
   if (ticksSinceRefresh >= 6) {
     ticksSinceRefresh = 0;
-    // sea level rises as comets and volcanoes add water: keep the globe and slider in step
-    if (Math.abs(world.planet.seaLevel - lastSea) > 0.002) {
-      lastSea = world.planet.seaLevel;
+    // continents drift and sea level rises as comets and volcanoes add water: redraw the globe
+    if (world.planet.terrainVersion !== lastTerrain) {
+      lastTerrain = world.planet.terrainVersion;
       renderer.updateTerrain();
-      $('sea-level').value = lastSea; refreshSea();
+      if (Math.abs(world.planet.seaLevel - lastSea) > 0.002) { lastSea = world.planet.seaLevel; $('sea-level').value = lastSea; refreshSea(); }
     } else renderer.updateColors();
     renderer.updateIcons();
   }

@@ -89,6 +89,12 @@ export const STORY = [
 ];
 
 export const EVENTS = {
+  allopatric: { icon: '🏝️', title: 'Isolation makes new species', earth: 'Darwin\'s finches; fish on either side of Panama, ~3 million years ago',
+    text: 'Most new species form when a population is cut off: by a new sea, a mountain range, or a band of unsuitable climate. Separated, the two halves adapt to their own conditions and drift apart genetically until they can no longer interbreed. Biologists call this allopatric speciation.' },
+  supercontinent: { icon: '🌐', title: 'A supercontinent', earth: 'Pangaea, ~335–175 million years ago; Rodinia, ~1.1 billion years ago',
+    text: 'Drifting continents periodically collide into one landmass. With fewer coastlines and shallow seas, and a vast dry interior, diversity tends to fall while a supercontinent lasts.' },
+  breakup: { icon: '🧩', title: 'A supercontinent breaks up', earth: 'Pangaea began rifting ~175 million years ago',
+    text: 'As a supercontinent rifts apart, new oceans open between the pieces. Life on each fragment evolves separately; this is why Australia has kangaroos and South America had giant ground sloths.' },
   snowball: { icon: '❄️', title: 'Snowball planet', earth: '~717 and ~650 million years ago',
     text: 'Ice reflects sunlight, so more ice means more cooling: a runaway feedback. Earth froze nearly pole to pole at least twice. Volcanoes kept pumping out CO₂ that frozen rocks couldn\'t absorb, until the greenhouse melted the ice.' },
   massext: { icon: '💀', title: 'Mass extinction', earth: 'Five major ones; the worst killed ~90% of species 252 million years ago',

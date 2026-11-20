@@ -196,6 +196,7 @@ export class Planet {
   // call after elevation or sea-level edits
   terrainChanged() {
     const { n } = this;
+    this.terrainVersion = (this.terrainVersion || 0) + 1;
     for (let i = 0; i < n; i++) this.water[i] = this.elev[i] < this.seaLevel ? 1 : 0;
     this.computeDistances();
     this.computeBase();
@@ -393,6 +394,7 @@ export class Planet {
   }
 
   editElevation(c, radius, amount) {
+    this.crustDirty = true; // plate tectonics must keep this edit
     const cells = this.cellsNear(c, radius);
     for (let k = 0; k < cells.length; k += 2) {
       const i = cells[k];
@@ -437,6 +439,7 @@ export class Planet {
 
   // icy comet: delivers water and organic molecules
   comet(c) {
+    this.crustDirty = true;
     const cells = this.cellsNear(c, 0.22);
     for (let k = 0; k < cells.length; k += 2) this.organics[cells[k]] += 1.6 * cells[k + 1];
     const crater = this.cellsNear(c, 0.04);
@@ -446,6 +449,7 @@ export class Planet {
   }
 
   impact(c) {
+    this.crustDirty = true;
     const crater = this.cellsNear(c, 0.07);
     for (let k = 0; k < crater.length; k += 2) {
       const i = crater[k], w = crater[k + 1];

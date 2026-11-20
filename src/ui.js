@@ -103,6 +103,9 @@ export class UI {
       const why = e.species.outcompeted ? 'was outcompeted and went extinct' : 'went extinct';
       this.chronicle(e.tick, `${e.species.icon} ${e.species.name} (${GRADES[e.species.grade].name.toLowerCase()}) ${why}.`, true);
       if (e.species.peakRange >= 500) this.toast(`${e.species.icon} ${e.species.name} ${why}.`, 'bad');
+    } else if (e.type === 'allopatric') {
+      if (!this.seenEvents?.has('allopatric')) { (this.seenEvents ||= new Set()).add('allopatric'); this.openCard(EVENTS.allopatric); }
+      if (e.zones >= 12) this.chronicle(e.tick, `${e.species.icon} Cut off from the rest of its range, a population of ${e.parent.name} becomes a new species, ${e.species.name}.`);
     } else if (e.type === 'lineage') {
       this.chronicle(e.tick, `${e.species.icon} ${GRADES[e.species.grade].name} arise again, from ${e.parent.name}.`);
     } else if (e.type === 'eon') {
@@ -214,6 +217,8 @@ export class UI {
           <dt>Appeared</dt><dd>${formatYears(sp.bornYears)}${parent ? ` from <i>${esc(parent.name)}</i>` : ''}</dd>
           <dt>Range</dt><dd>${sp.range} zones (peak ${sp.peakRange})</dd>
           <dt>Climate</dt><dd>${sp.pref.toFixed(0)}°C ± ${sp.tol.toFixed(0)}°</dd>
+          <dt>Niche</dt><dd>${nicheText(sp)}</dd>
+          ${sp.allopatric ? '<dt>Origin</dt><dd>Split off after its population was isolated</dd>' : ''}
           <dt>Needs O₂</dt><dd>${G.o2 ? `${G.o2}% or more` : 'none (anaerobic)'}</dd>
           <dt>Reproduction</dt><dd>${sp.sexual ? 'Sexual' : 'Asexual (cloning or splitting)'}</dd>
         </dl>`;
@@ -227,6 +232,7 @@ export class UI {
           <span class="tag t${sp.trophic}">${TROPHIC_NAMES[sp.trophic]}</span>
           <span class="tag h${sp.habitat}">${HABITAT_NAMES[sp.habitat]}</span>
           ${sp.pref < 2 ? '<span class="tag h0">Cold-adapted</span>' : sp.pref > 30 ? '<span class="tag t5">Heat-loving</span>' : ''}
+          ${nicheTags(sp)}
         </span>${detail}</li>`;
     });
     setHTML($('species-list'), rows.join('') || '<li class="muted small">None living.</li>');
@@ -308,6 +314,8 @@ export class UI {
     html += gauge('Ozone shield', `${Math.round(P.ozone * 100)}%`, P.ozone, P.ozone < 0.5 ? 'Without ozone, ultraviolet light sterilises dry land.' : '', 'g-o3');
     html += gauge('Ocean cover', `${Math.round(P.oceanFrac * 100)}%`, P.oceanFrac, '', 'g-sea');
     html += gauge('Ice cover', `${Math.round(P.iceFrac * 100)}%`, P.iceFrac, '', 'g-ice');
+    const T = W.tect;
+    html += gauge('Continents', `${T.landmasses} landmass${T.landmasses === 1 ? '' : 'es'}`, T.largestShare, T.speed > 0 ? `${T.P} plates drifting. The largest landmass holds ${Math.round(T.largestShare * 100)}% of the land.` : 'Continental drift is switched off.', 'g-land');
     html += gauge('Sunlight', `${Math.round(P.sun * 100)}% of today`, (P.sun - 0.7) / 0.35, P.sun < 0.85 ? 'The young Sun is dim; a strong greenhouse keeps the planet warm.' : '', 'g-sun');
     if (E.alive.length === 0) {
       const potential = W.lifePotential;
@@ -360,6 +368,22 @@ const kingdomColor = (sp) => KINGDOMS[sp.kingdom].color;
 // only touch the DOM when the markup actually changed
 function setHTML(el, html) {
   if (el._html !== html) { el.innerHTML = html; el._html = html; }
+}
+
+// plain-language niche: rainfall and altitude on land, depth at sea
+function nicheText(sp) {
+  const parts = [];
+  if (sp.habitat === 0) parts.push(sp.n2 < 0.2 ? 'coastal shallows' : sp.n2 > 0.55 ? 'deep sea' : 'open ocean');
+  else parts.push(sp.n2 < 0.25 ? 'dry ground' : sp.n2 > 0.7 ? 'wet ground' : 'moderate rainfall');
+  if (sp.habitat === 2) parts.push(sp.alt > 0.45 ? 'mountains' : sp.alt > 0.22 ? 'uplands' : 'lowlands');
+  return parts.join(', ');
+}
+
+function nicheTags(sp) {
+  if (sp.habitat === 0) return sp.n2 > 0.55 ? '<span class="tag h0">Deep sea</span>' : sp.n2 < 0.2 ? '<span class="tag h1">Shallows</span>' : '';
+  let t = sp.n2 < 0.25 ? '<span class="tag h2">Desert</span>' : sp.n2 > 0.7 ? '<span class="tag t1">Rainforest &amp; wetland</span>' : '';
+  if (sp.habitat === 2 && sp.alt > 0.45) t += '<span class="tag">Alpine</span>';
+  return t;
 }
 
 function latLon(pos, c) {

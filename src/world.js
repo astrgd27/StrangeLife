@@ -5,6 +5,7 @@ import { Planet, BIOMES, B } from './planet.js';
 import { Ecosystem, GRADES, KINGDOM_KEYS, TROPHIC } from './ecosystem.js';
 import { mulberry32 } from './rng.js';
 import { storyByKey } from './science.js';
+import { Tectonics } from './tectonics.js';
 
 // The four eons of Earth's history. Time runs fast while only microbes live and slows down once
 // complex life appears, so the whole story fits into a game session.
@@ -27,6 +28,7 @@ export class World {
     this.scenario = opts.scenario ?? 'barren';
     this.planet = new Planet(seed, opts.level ?? 6, this.scenario);
     this.rng = mulberry32(seed * 7919 + 13);
+    this.tect = new Tectonics(this.planet, seed);
     this.eco = new Ecosystem(this.planet, this.rng);
     this.tick = 0;
     this.years = this.planet.startYears;
@@ -164,7 +166,9 @@ export class World {
     this.years += EONS[this.eon].yearsPerTick;
     const P = this.planet;
     P.step(this.tick);
-    if (this.tick % 6 === 0) this.eco.updateEnvironment();
+    // continents drift; when the map changes, the zones' environments change with it
+    const moved = this.tect.step(EONS[this.eon].yearsPerTick);
+    if (moved || this.tick % 6 === 0) this.eco.updateEnvironment();
     this.eco.step(this.years);
     if (this.eco.alive.length === 0) this.stepAbiogenesis();
     if (this.naturalEvents) this.naturalDisasters();
@@ -260,6 +264,17 @@ export class World {
     if (P.iron <= 0 && this.lifeBegan) { this.achieve(['goe']); this.setEon(2); }
     if (P.ozone >= 0.5 && this.lifeBegan) this.achieve(['ozone']);
 
+    // supercontinent cycle
+    const T = this.tect;
+    if (T.moves > 30) {
+      if (!this.supercontinent && T.largestShare > 0.7) {
+        this.supercontinent = true;
+        this.emit({ type: 'milestone', key: 'super-' + this.tick, event: 'supercontinent', text: 'The continents have collided into one supercontinent.' });
+      } else if (this.supercontinent && T.largestShare < 0.45) {
+        this.supercontinent = false;
+        this.emit({ type: 'milestone', key: 'breakup-' + this.tick, event: 'breakup', text: 'The supercontinent is rifting apart. New oceans open between the pieces.' });
+      }
+    }
     if (P.iceFrac > 0.45 && !this.snowball) { this.snowball = true; this.emit({ type: 'milestone', key: 'snowball-' + this.tick, event: 'snowball', text: 'The planet freezes over: a snowball world.', bad: true }); }
     if (this.snowball && P.iceFrac < 0.2) { this.snowball = false; this.emit({ type: 'milestone', key: 'thaw-' + this.tick, text: 'The ice retreats: the snowball thaws.' }); }
 

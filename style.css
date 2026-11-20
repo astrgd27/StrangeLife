@@ -311,7 +311,7 @@ input[type='range'] { accent-color: var(--sun); width: 100%; }
 .g-temp .bar > i { background: var(--sun); } .g-co2 .bar > i { background: var(--co2); }
 .g-o2 .bar > i { background: var(--o2); } .g-o3 .bar > i { background: #b59cff; }
 .g-sea .bar > i { background: #3f86d6; } .g-ice .bar > i { background: #dfe9f5; }
-.g-sun .bar > i { background: #ffe08a; } .g-life .bar > i { background: var(--leaf); }
+.g-sun .bar > i { background: #ffe08a; } .g-land .bar > i { background: #c9a36a; } .g-life .bar > i { background: var(--leaf); }
 .g-note { font-size: 11.5px; color: var(--ink-dim); margin-top: 3px; }
 .abio { margin-top: 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(121, 210, 154, 0.35); }
 .story { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }

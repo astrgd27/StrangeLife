@@ -69,6 +69,19 @@ export const GRADES = {
 };
 export const GRADE_KEYS = Object.keys(GRADES);
 
+// How narrowly each kind of life specialises on the second niche axis (rainfall on land, water
+// depth at sea) and on altitude. Microbes are generalists; plants are picky about rainfall.
+export function nicheTol(grade) {
+  const G = GRADES[grade];
+  if (grade === 'sapient') return { n2: 1.2, alt: 1.2 };
+  if (G.tier === 0) return { n2: 0.6, alt: 0.6 };
+  if (G.kingdom === 'plant') return { n2: 0.22, alt: 0.25 };
+  if (G.kingdom === 'fungus') return { n2: 0.35, alt: 0.4 };
+  if (G.kingdom === 'protist') return { n2: 0.45, alt: 0.5 };
+  if (grade === 'mammal' || grade === 'bird' || grade === 'whale') return { n2: 0.35, alt: 0.4 };
+  return { n2: 0.3, alt: 0.3 };
+}
+
 // icon variants within a grade (by diet and size)
 function pickIcon(g, trophic, size) {
   if (g === 'fish') return trophic === TROPHIC.PREDATOR ? '🦈' : '🐟';
@@ -164,6 +177,8 @@ export class Ecosystem {
     this.zTs = new Float32Array(Z); this.zTl = new Float32Array(Z);
     this.zKs = new Float32Array(Z); this.zKl = new Float32Array(Z);
     this.zOrg = new Float32Array(Z); this.orgFactor = new Float32Array(Z);
+    // niche axes: rainfall and altitude of the land part, depth of the sea part (all 0..1)
+    this.zMl = new Float32Array(Z); this.zHl = new Float32Array(Z); this.zDs = new Float32Array(Z);
     this.detS = new Float32Array(Z); this.detL = new Float32Array(Z);
     this.coverS = new Float32Array(Z); this.coverL = new Float32Array(Z);
     this.suit = new Float32Array(Z * MAXT);
@@ -179,14 +194,18 @@ export class Ecosystem {
     const P = this.planet, Z = this.Z, zoneOf = this.zoneOf;
     const sea = new Float32Array(Z), land = new Float32Array(Z), ts = new Float32Array(Z), tl = new Float32Array(Z);
     const ks = new Float32Array(Z), kl = new Float32Array(Z), org = new Float32Array(Z), tAll = new Float32Array(Z);
+    const ml = new Float32Array(Z), hl = new Float32Array(Z), ds = new Float32Array(Z);
+    const depthScale = 1 / Math.max(0.3, 1 + P.seaLevel);
     for (let c = 0; c < P.n; c++) {
       const z = zoneOf[c], T = P.temp[c], b = P.biome[c];
       tAll[z] += T;
       if (P.water[c]) {
         sea[z]++; ts[z] += T; org[z] += P.organics[c];
+        ds[z] += Math.min(1, (P.seaLevel - P.elev[c]) * depthScale * 1.6);
         if (b !== 2 && b !== 12) ks[z] += P.K[c] * P.light[c];
       } else if (b !== 3) {
         land[z]++; tl[z] += T; kl[z] += P.K[c] * P.light[c];
+        ml[z] += P.moist[c]; hl[z] += P.heightAboveSea(c);
       }
     }
     for (let z = 0; z < Z; z++) {
@@ -198,19 +217,37 @@ export class Ecosystem {
       this.zKs[z] = ks[z] / n;
       this.zKl[z] = kl[z] / n;
       this.zOrg[z] = sea[z] ? org[z] / n : 0;
+      this.zMl[z] = land[z] ? ml[z] / land[z] : 0.5;
+      this.zHl[z] = land[z] ? hl[z] / land[z] : 0;
+      this.zDs[z] = sea[z] ? ds[z] / sea[z] : 0.3;
     }
     // refresh a rotating share of species each call; climate changes slowly
     const nA = this.alive.length;
     for (let k = 0; k < nA; k += 4) { const s = this.alive[(k + (this.envCalls = (this.envCalls || 0) + 1)) % nA]; this.refreshSuit(s); }
   }
 
-  // how well each species' temperature preference fits each zone (cached; climate changes slowly)
+  // the local values of a species' niche axes in a zone
+  localNiche(h, z) {
+    return {
+      T: h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]),
+      n2: h === 0 ? this.zDs[z] : this.zMl[z], // depth at sea, rainfall on land and coasts
+      alt: h === 2 ? this.zHl[z] : 0,
+    };
+  }
+
+  // How well a species fits each zone: temperature × (rainfall or depth) × altitude, each a
+  // bell curve around its preference. Cached, because climate changes slowly.
   refreshSuit(s) {
+    const sp = this.slots[s];
+    if (!sp) return;
     const pref = this.tPref[s], tol = this.tTol[s], h = this.tHab[s], suit = this.suit;
+    const n2 = sp.n2, n2t = sp.n2tol, alt = sp.alt, altT = sp.altTol;
     for (let z = 0; z < this.Z; z++) {
       const T = h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]);
       const d = (T - pref) / tol;
-      suit[z * MAXT + s] = Math.exp(-0.5 * d * d);
+      const e = ((h === 0 ? this.zDs[z] : this.zMl[z]) - n2) / n2t;
+      const a = h === 2 ? (this.zHl[z] - alt) / altT : 0;
+      suit[z * MAXT + s] = Math.exp(-0.5 * (d * d + e * e + a * a));
     }
   }
 
@@ -230,6 +267,8 @@ export class Ecosystem {
       id: this.nextId++, slot, grade, kingdom: G.kingdom,
       trophic, habitat, size,
       pref: opts.pref ?? 20, tol: opts.tol ?? G.tol,
+      n2: opts.n2 ?? 0.5, n2tol: opts.n2tol ?? nicheTol(grade).n2,
+      alt: opts.alt ?? 0.1, altTol: opts.altTol ?? nicheTol(grade).alt,
       sexual: opts.sexual ?? (G.tier >= 2 || G.kingdom === 'animal' || G.kingdom === 'fungus'),
       parent: parent ? parent.id : 0, born: this.tick, bornYears: opts.years ?? 0, died: -1,
       total: 0, range: 0, peak: 0, peakRange: 0, seeded: !!opts.seeded,
@@ -319,8 +358,8 @@ export class Ecosystem {
     let habitat = opts.habitat ?? G.habitats[0];
     // pick a habitat the zone actually has
     if (!this.habitatOk(habitat, z)) habitat = G.habitats.find((h) => this.habitatOk(h, z)) ?? habitat;
-    const T = habitat === 0 ? this.zTs[z] : habitat === 2 ? this.zTl[z] : (this.zTs[z] + this.zTl[z]) / 2;
-    const sp = this.createSpecies(grade, { ...opts, habitat, pref: opts.pref ?? T });
+    const L = this.localNiche(habitat, z);
+    const sp = this.createSpecies(grade, { ...opts, habitat, pref: opts.pref ?? L.T, n2: opts.n2 ?? L.n2, alt: opts.alt ?? L.alt });
     if (!sp) return null;
     this.introduce(sp, z, opts.amount ?? (G.r ? 0.08 : 0.02));
     this.onEvent({ type: 'seed', species: sp });
@@ -384,7 +423,8 @@ export class Ecosystem {
     const o2 = P.o2, ozone = P.ozone;
     const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing } = this;
     const total = this.total, range = this.range, sumT = this.sumT, pres = this.pres, presN = this.presN;
-    total.fill(0); range.fill(0); sumT.fill(0);
+    const sumN2 = this.sumN2 || (this.sumN2 = new Float32Array(MAXT)), sumA = this.sumA || (this.sumA = new Float32Array(MAXT));
+    total.fill(0); range.fill(0); sumT.fill(0); sumN2.fill(0); sumA.fill(0);
     const nA = alive.length;
     const fungK = KINGDOM_KEYS.indexOf('fungus');
     const pollinators = this.gradeAlive('insect') || this.gradeAlive('bird');
@@ -492,6 +532,8 @@ export class Ecosystem {
           if (nb > 1e-4) kmask |= 1 << tKing[s];
           const h = tHab[s];
           sumT[s] += nb * (h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]));
+          sumN2[s] += nb * (h === 0 ? this.zDs[z] : this.zMl[z]);
+          if (h === 2) sumA[s] += nb * this.zHl[z];
         }
       }
       presN[z] = w;
@@ -506,6 +548,7 @@ export class Ecosystem {
     this.lifeZones = lifeZones;
     if (this.tick % 4 === 0) this.disperse();
     this.evolve();
+    if (this.tick % 20 === 0) this.checkIsolation();
     // tell the planet what the biosphere is doing
     P.primaryProduction = prodTotal / Z;
     P.landProduction = landProd / Z;
@@ -559,8 +602,10 @@ export class Ecosystem {
       if (sp.total < 2e-4 || (sp.total < 3e-3 && sp.range <= 3 && this.tick - sp.born > 150)) { this.extinct(s); continue; }
       // anagenesis: populations adapt to the temperatures they actually live in
       if (this.tick % 5 === 0) {
-        const meanT = this.sumT[s] / sp.total;
-        sp.pref += (meanT - sp.pref) * 0.02 * this.mutationRate;
+        const k = 0.02 * this.mutationRate;
+        sp.pref += (this.sumT[s] / sp.total - sp.pref) * k;
+        sp.n2 += (this.sumN2[s] / sp.total - sp.n2) * k;
+        if (sp.habitat === 2) sp.alt += (this.sumA[s] / sp.total - sp.alt) * k;
         this.tPref[s] = sp.pref;
         if (this.tick % 40 === 0) this.refreshSuit(s);
       }
@@ -570,7 +615,7 @@ export class Ecosystem {
       // diversity-dependent diversification: a crowded niche (same grade) splits more slowly
       const nG = gradeCounts[sp.grade];
       const crowded = (nG > 10 ? Math.exp(-(nG - 10) / 5) : 1) * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 25) : 1);
-      const pSpec = 0.0015 * this.mutationRate * rangeF * (sp.sexual ? 1.5 : 1) * crowded;
+      const pSpec = 0.0009 * this.mutationRate * rangeF * (sp.sexual ? 1.5 : 1) * crowded;
       if (rng() < pSpec) this.speciate(sp, sp.grade);
     }
     // Competitive exclusion: when one grade holds too many species, the rarest is squeezed out.
@@ -605,6 +650,86 @@ export class Ecosystem {
     }
   }
 
+  // Allopatric speciation: when a species' range breaks into pieces that can't exchange
+  // migrants (an ocean opens, a mountain range or climate barrier rises), each isolated piece
+  // evolves on its own. If a sizeable fragment stays cut off for long enough, it becomes a
+  // separate species, adapted to its own patch of the world.
+  checkIsolation() {
+    const B = this.B, zg = this.zgrid, Z = this.Z;
+    const comp = this._comp || (this._comp = new Int32Array(Z));
+    const queue = this._queue || (this._queue = new Int32Array(Z));
+    const ISOLATION_CHECKS = 6; // ~120 ticks of separation
+    const nA = this.alive.length;
+    if (nA >= MAXT - 5) return;
+    for (const s of this.alive.slice()) {
+      const sp = this.slots[s];
+      if (!sp || sp.range < 6) { if (sp) sp.isolates = null; continue; }
+      comp.fill(-1);
+      const comps = [];
+      for (let z = 0; z < Z; z++) {
+        if (comp[z] >= 0 || B[z * MAXT + s] < 3e-4) continue;
+        const id = comps.length, zones = [];
+        let total = 0, qh = 0, qt = 0;
+        queue[qt++] = z; comp[z] = id;
+        while (qh < qt) {
+          const q = queue[qh++];
+          zones.push(q); total += B[q * MAXT + s];
+          for (let k = zg.nbrStart[q]; k < zg.nbrStart[q + 1]; k++) {
+            const m = zg.nbr[k];
+            if (comp[m] < 0 && B[m * MAXT + s] >= 3e-4) { comp[m] = id; queue[qt++] = m; }
+          }
+        }
+        comps.push({ zones, total });
+      }
+      if (comps.length < 2) { sp.isolates = null; continue; }
+      comps.sort((a, b) => b.total - a.total);
+      const prev = sp.isolates || [];
+      const next = [];
+      for (const c of comps.slice(1)) {
+        if (c.zones.length < 3 || c.total < 0.06 * sp.total) continue;
+        // is this the same fragment we saw last time? (most of its zones overlap)
+        const set = new Set(c.zones);
+        let count = 1;
+        for (const p of prev) {
+          let overlap = 0;
+          for (const z of p.zones) if (set.has(z)) overlap++;
+          if (overlap >= 0.5 * Math.min(p.zones.length, c.zones.length)) { count = p.count + 1; break; }
+        }
+        if (count >= ISOLATION_CHECKS && this.alive.length < MAXT - 5) this.splitFragment(sp, c);
+        else next.push({ zones: c.zones, count });
+      }
+      sp.isolates = next;
+    }
+  }
+
+  splitFragment(sp, frag) {
+    const rng = this.rng, s = sp.slot, B = this.B;
+    // the fragment's own conditions, weighted by where its populations are
+    let w = 0, T = 0, n2 = 0, alt = 0;
+    for (const z of frag.zones) {
+      const b = B[z * MAXT + s], L = this.localNiche(sp.habitat, z);
+      w += b; T += b * L.T; n2 += b * L.n2; alt += b * L.alt;
+    }
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    // isolated populations drift genetically as well as adapting
+    const child = this.createSpecies(sp.grade, {
+      parent: sp.id, habitat: sp.habitat, trophic: sp.trophic, sexual: sp.sexual,
+      pref: T / w + gaussian(rng) * 1.5, tol: sp.tol * Math.exp(gaussian(rng) * 0.08),
+      n2: clamp01(n2 / w + gaussian(rng) * 0.05), n2tol: sp.n2tol, alt: clamp01(alt / w), altTol: sp.altTol,
+      size: Math.max(0, Math.min(1, sp.size + gaussian(rng) * 0.08)), years: this.years,
+    });
+    if (!child) return null;
+    for (const z of frag.zones) {
+      const b = B[z * MAXT + s];
+      if (b <= 0) continue;
+      B[z * MAXT + s] = 0;
+      this.addB(z, child.slot, b);
+    }
+    child.allopatric = true;
+    this.onEvent({ type: 'allopatric', species: child, parent: sp, zones: frag.zones.length });
+    return child;
+  }
+
   // a zone in the species' range, biased toward stressed populations at the range edge
   pickZone(sp, pred = () => true) {
     const s = sp.slot;
@@ -624,7 +749,6 @@ export class Ecosystem {
   speciate(sp, grade, z = this.pickZone(sp), transition = null) {
     if (z < 0) return null;
     const rng = this.rng, G = GRADES[grade];
-    const local = (h) => (h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]));
     let habitat = sp.habitat, trophic = sp.trophic;
     if (transition) {
       habitat = transition.hab ?? (G.habitats.includes(sp.habitat) ? sp.habitat : G.habitats[0]);
@@ -635,12 +759,17 @@ export class Ecosystem {
     }
     if (!G.habitats.includes(habitat)) habitat = G.habitats[0];
     if (!this.habitatOk(habitat, z)) return null;
-    const pref = sp.pref + (local(habitat) - sp.pref) * 0.5 + gaussian(rng) * 3;
+    const L = this.localNiche(habitat, z);
+    const pref = sp.pref + (L.T - sp.pref) * 0.5 + gaussian(rng) * 3;
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const n2 = clamp01(habitat === sp.habitat ? sp.n2 + (L.n2 - sp.n2) * 0.5 + gaussian(rng) * 0.1 : L.n2);
+    const alt = clamp01(habitat === 2 ? (sp.habitat === 2 ? sp.alt : L.alt) + (L.alt - sp.alt) * 0.5 + gaussian(rng) * 0.08 : 0);
     const tol = Math.max(3, Math.min(30, (transition ? G.tol : sp.tol) * Math.exp(gaussian(rng) * 0.15)));
     const size = transition ? 0.2 + rng() * 0.2 : sp.size + gaussian(rng) * 0.12;
     const eukaryote = G.kingdom !== 'bacteria' && G.kingdom !== 'archaea';
     const sexual = eukaryote && (sp.sexual || G.tier >= 2 || rng() < 0.15);
-    const child = this.createSpecies(grade, { parent: sp.id, habitat, trophic, pref, tol, size, sexual, years: this.years });
+    const child = this.createSpecies(grade, { parent: sp.id, habitat, trophic, pref, tol, size, sexual, n2, alt, years: this.years,
+      n2tol: transition ? undefined : Math.max(0.08, Math.min(1.2, sp.n2tol * Math.exp(gaussian(rng) * 0.15))) });
     if (!child) return null;
     // the founding population: part of the parent's local population becomes the new species
     const zg = this.zgrid;

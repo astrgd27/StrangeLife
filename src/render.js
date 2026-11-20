@@ -15,6 +15,13 @@ export function surfaceRadius(e) {
   return 1 + (e > 0 ? e * LAND_H : e * SEA_H);
 }
 
+function hsl(h, s, l) {
+  const k = (n) => (n + h * 12) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [f(0), f(8), f(4)];
+}
+
 export function speciesRGB(sp, l = 0.55) {
   const h = sp.hue, s = 0.62;
   const k = (n) => (n + h * 12) % 12;
@@ -342,7 +349,21 @@ export class Renderer {
   updateColors() {
     const W = this.world, P = W.planet, E = W.eco;
     const out = this.colorBuf;
-    if (this.overlay === 'diversity') {
+    if (this.overlay === 'plates') {
+      // each tectonic plate in its own colour; boundaries dark, volcanic belts glowing
+      const T = W.tect, nb = P.grid;
+      for (let c = 0; c < P.n; c++) {
+        const p = T.label[c];
+        const h = (p * 0.618) % 1;
+        let [r, g, b] = hsl(h, 0.45, P.water[c] ? 0.32 : 0.55);
+        let edge = false;
+        for (let k = nb.nbrStart[c]; k < nb.nbrStart[c + 1]; k++) if (T.label[nb.nbr[k]] !== p) edge = true;
+        if (edge) { r *= 0.35; g *= 0.35; b *= 0.35; }
+        const v = P.volc[c];
+        if (v > 0.5) { r = r * 0.5 + 0.5; g = g * 0.6 + 0.15; b *= 0.5; }
+        out[c * 3] = r; out[c * 3 + 1] = g; out[c * 3 + 2] = b;
+      }
+    } else if (this.overlay === 'diversity') {
       // number of species per zone
       for (let c = 0; c < P.n; c++) {
         const z = E.zoneOf[c];
