@@ -85,6 +85,7 @@ export class UI {
     $('inspector').addEventListener('pointerdown', (e) => {
       if (e.target.closest('[data-act=close]')) { this.inspectCell = -1; $('inspector').hidden = true; return; }
       if (e.target.closest('[data-act=dive]')) { this.hooks.dive?.(this.world.eco.zoneOf[this.inspectCell]); return; }
+      if (e.target.closest('[data-act=web]')) { this.hooks.web?.(this.inspectCell); return; }
       pickSpecies(e);
     });
     $('card-close').addEventListener('click', () => this.nextCard());
@@ -175,6 +176,17 @@ export class UI {
       if (this.cards[0]?.tick === e.tick) this.renderCard();
       if (EVENTS['g_' + e.grade]) this.firstCard('g_' + e.grade, { img: url, caption: `${sp.name}: ${sp.body}`, tick: e.tick });
       else this.firstCard('bodyplan');
+    } else if (e.type === 'firstof') {
+      const sp = e.species, host = sp.host ? this.world.eco.species.get(sp.host) : null;
+      const txt = e.key === 'parasites' ? `${sp.icon} The first parasite: ${sp.name} lives in ${host ? host.name : 'a host'}.`
+        : e.key === 'corals' ? `${sp.icon} ${sp.name} takes algae into its tissues: the first reef-building corals.`
+        : `${sp.icon} ${sp.name} hosts microbes in its gut that digest plants for it.`;
+      this.chronicle(e.tick, txt);
+      this.firstCard(e.key, { img: spriteURL(sp, 96), caption: `${sp.name}: ${sp.body}`, tick: e.tick });
+    } else if (e.type === 'cascade') {
+      this.chronicle(e.tick, `🕸 Trophic cascade: with ${e.species.name} gone, its prey ${e.prey.name} has boomed ${e.ratio.toFixed(1)}-fold.`, true);
+      this.toast(`🕸 Trophic cascade: without its predator, ${e.prey.name} booms.`, 'bad');
+      this.firstCard('cascade', { img: spriteURL(e.prey, 96), caption: `${e.prey.name}, released from ${e.species.name}`, tick: e.tick });
     } else if (e.type === 'freshwater') {
       this.chronicle(e.tick, `🏞️ ${e.species.name} settles in rivers and lakes: the first freshwater life.`);
       this.firstCard('freshwater');
@@ -310,12 +322,13 @@ export class UI {
           <dt>Climate</dt><dd>${sp.pref.toFixed(0)}°C ± ${sp.tol.toFixed(0)}°</dd>
           <dt>Niche</dt><dd>${nicheText(sp)}</dd>
           ${sp.allopatric ? '<dt>Origin</dt><dd>Split off after its population was isolated</dd>' : sp.display ? '<dt>Origin</dt><dd>Split by mate choice (sexual selection)</dd>' : sp.cospeciated ? '<dt>Origin</dt><dd>Split along with its host plant</dd>' : ''}
-          ${sp.host && E.species.get(sp.host) ? `<dt>Specialist</dt><dd>Feeds on ${E.species.get(sp.host).icon} <i>${esc(E.species.get(sp.host).name)}</i>${E.species.get(sp.host).died >= 0 ? ' (extinct)' : ''}</dd>` : ''}
+          ${sp.host && E.species.get(sp.host) ? `<dt>${sp.trophic === 6 ? 'Host' : 'Specialist'}</dt><dd>${sp.trophic === 6 ? 'Lives in' : 'Feeds on'} ${E.species.get(sp.host).icon} <i>${esc(E.species.get(sp.host).name)}</i>${E.species.get(sp.host).died >= 0 ? ' (extinct)' : ''}</dd>` : ''}
           ${sp.island ? '<dt>Island</dt><dd>Evolved on an island; found nowhere else</dd>' : ''}
           <dt>Needs O₂</dt><dd>${sp.eco?.o2 ? `${sp.eco.o2.toFixed(1)}% or more` : 'none (anaerobic)'}</dd>
           ${sp.trophic !== 1 && sp.eco && sp.ph?.animal ? `<dt>Defences</dt><dd>${defenceText(sp)}</dd>` : ''}
           <dt>Reproduction</dt><dd>${sp.sexual ? 'Sexual' : 'Asexual (cloning or splitting)'}</dd>
-          ${sp.ph?.animal ? `<dt>Behaviour</dt><dd>${behaviourText(sp)}</dd>` : ''}
+          ${sp.ph?.animal && sp.trophic !== 6 ? `<dt>Behaviour</dt><dd>${behaviourText(sp)}</dd>` : ''}
+          ${webText(E, sp)}
         </dl>
         ${sp.ph?.animal ? `<button class="primary small-btn" data-watch="${sp.id}">🔬 Watch it up close</button>` : ''}`;
       }
@@ -329,7 +342,7 @@ export class UI {
           <span class="tag h${sp.habitat}">${HABITAT_NAMES[sp.habitat]}</span>
           ${sp.pref < 2 ? '<span class="tag h0">Cold-adapted</span>' : sp.pref > 30 ? '<span class="tag t5">Heat-loving</span>' : ''}
           ${nicheTags(sp)}
-          ${sp.host ? '<span class="tag t3">Specialist</span>' : ''}${sp.island ? '<span class="tag h1">Island</span>' : ''}${sp.range > 0 && sp.range <= 15 ? '<span class="tag">Endemic</span>' : ''}
+          ${sp.host && sp.trophic !== 6 ? '<span class="tag t3">Specialist</span>' : ''}${sp.keystone ? '<span class="tag key">Keystone</span>' : ''}${sp.ph?.partner ? '<span class="tag mut">Partners</span>' : ''}${sp.island ? '<span class="tag h1">Island</span>' : ''}${sp.range > 0 && sp.range <= 15 ? '<span class="tag">Endemic</span>' : ''}
         </span>${detail}</li>`;
     });
     setHTML($('species-list'), rows.join('') || '<li class="muted small">None living.</li>');
@@ -470,7 +483,7 @@ export class UI {
       </dl>
       <hr><div class="sub">${d.life.length ? `Life in this zone (${d.life.length} species)` : 'No life in this zone yet.'}</div>
       <ol class="zone-life">${life}</ol>
-      ${d.life.some(({ sp }) => sp.ph?.animal) ? '<button class="primary small-btn dive-btn" data-act="dive">🔬 Go in close: watch the animals (Z)</button>' : ''}`;
+      ${d.life.length ? `<div class="zone-actions"><button class="small-btn dive-btn" data-act="web">🕸 Food web (W)</button>${d.life.some(({ sp }) => sp.ph?.animal && sp.trophic !== 6) ? '<button class="primary small-btn dive-btn" data-act="dive">🔬 Go in close (Z)</button>' : ''}</div>` : ''}`;
     el.hidden = false;
     if (narrow()) $('panel').classList.add('collapsed');
   }
@@ -572,4 +585,23 @@ function behaviourText(sp) {
   if (!sp.brain || !sp.skills) return '<span class="muted">Instinct only. Watch it up close and its behaviour will evolve.</span>';
   const b = behaviours(sp.skills, dietOf(sp));
   return `${b.length ? b.join(', ') : 'no special behaviour yet'}${sp.brainGens ? ` <span class="muted">(evolved over ${sp.brainGens} generations watched)</span>` : ''}`;
+}
+
+// a species' place in the food web: what it eats and what eats it (from recent feeding), its
+// parasites and partners
+function webText(E, sp) {
+  const s = sp.slot, F = E.flow, top = (vals) => vals.filter((v) => v[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const eats = top(E.alive.map((q) => [q, F[s * MAXT + q]])).map(([q]) => E.slots[q]);
+  const by = top(E.alive.map((p) => [p, F[p * MAXT + s]])).map(([p]) => E.slots[p]).filter((q) => q.trophic !== 6);
+  const pars = E.alive.map((q) => E.slots[q]).filter((q) => q.trophic === 6 && q.host === sp.id);
+  const nm = (q) => `${q.icon} <i>${esc(q.name)}</i>`;
+  const diet = sp.trophic === 1 ? 'sunlight' : sp.trophic === 0 ? 'chemicals from vents and the primordial soup' : sp.trophic === 2 ? 'dead matter' : null;
+  const rows = [];
+  if (sp.trophic !== 6) rows.push(['Eats', eats.length ? eats.map(nm).join(', ') + (sp.trophic === 5 ? ', and plants' : '') : diet || (sp.trophic === 3 ? 'plants and microbes' : 'whatever prey it finds')]);
+  if (by.length) rows.push(['Eaten by', by.map(nm).join(', ')]);
+  if (pars.length) rows.push(['Parasites', pars.slice(0, 3).map(nm).join(', ')]);
+  if (sp.keystone) rows.push(['Keystone', `Holds ${sp.keystone.map((id) => E.species.get(id)).filter(Boolean).slice(0, 2).map(nm).join(' and ')} in check`]);
+  const P = { algae: 'Algae living in its tissues feed it sugar (it can bleach in heat)', gut: 'Gut microbes digest plants for it', roots: 'Root bacteria fix nitrogen for it' };
+  if (sp.ph?.partner) rows.push(['Partners', P[sp.ph.partner]]);
+  return rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
 }

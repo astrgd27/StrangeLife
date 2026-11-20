@@ -36,6 +36,7 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 | `Space` | Pause / resume |
 | `[` `]` | Slower / faster |
 | `T` | Tree of life |
+| `W` | Food web of the zone you inspected (or the one under the cursor) |
 | `Z` | Go in close: watch the animals of the zone you inspected (or the one under the cursor) as individuals |
 | `H` | Help |
 
@@ -77,6 +78,10 @@ Everything below emerges from the simulation. Nothing is scripted to happen at a
 
 ### Ecology: populations, not individuals
 Each zone holds the biomass of every species living there:
+- **Food webs.** Predators choose their prey: hunters take animals about a third of their own size, filter-feeders much smaller ones, and well-defended prey (big, armoured, fast, flying) are both safer and poorer food. Each predator–prey link carries its own flow of food, so a predator that takes most of a common prey's losses is a **keystone species**. When one dies out, its prey can boom: a **trophic cascade**, reported in the chronicle.
+- **Parasites.** Protists, fungi, worms and small arthropods can take to living in one host species. Hosts' defences keep parasites a modest share of their biomass, parasites spread only where their hosts live, and they split along with their hosts (cospeciation).
+- **Partnerships.** One gene means different partners in different bodies: algae living in coral tissues (corals build reefs and **bleach** when the sea gets too warm), gut microbes that digest plants for grazers, and nitrogen-fixing bacteria in plant roots. Mycorrhizal fungi and pollinators work as before.
+- **The food-web view.** Inspect a zone and press **🕸 Food web** (or `W`) to see who eats whom there, by trophic level, with parasites and partnerships.
 - **Producers** (cyanobacteria, algae, plants) grow logistically and compete for light.
 - **Consumers** feed from shared pools with a saturating (Holling type II) response: chemotrophs on organic molecules, grazers on producers or microbes, predators on grazers, decomposers on dead matter.
 - **Decomposers and mycorrhizal fungi** recycle nutrients, which boosts plant growth.
@@ -153,6 +158,7 @@ src/sprites.js      procedural organism portraits drawn from each species' genom
 src/brain.js        tiny evolving neural-network brains, and reading behaviour from them
 src/microcosm.js    one zone simulated as individual animals with brains
 src/zoneview.js     the up-close view of a zone
+src/foodweb.js      the food-web view of a zone
 src/ecosystem.js    zones, species, niches, population ecology, dispersal, speciation, mergers
 src/world.js        planet + ecosystem, abiogenesis, eons, natural events, history, milestones
 src/science.js      the story of life: real-science notes for each transition
@@ -183,7 +189,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled, and [IDEAS.md](IDEAS.md) for what's next, including the plan to go deeper than SimEarth.
 
-Next on the list: explicit food webs built on the genome traits, and laboratory tools (replaying the tape of life, diversity curves, exporting data).
+Next on the list: arms races and life histories (plant toxins, grasses and grazers, fire, metamorphosis, social insects), then Earth's geographic patterns and checking the planet against Earth.
 
 ## License
 

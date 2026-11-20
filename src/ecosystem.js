@@ -33,8 +33,8 @@ const LAND_GROUPS = new Set(['insect', 'arachnid', 'myriapod', 'amphibian', 'rep
   'mammal', 'rodent', 'ungulate', 'carnivoran', 'primate', 'bat', 'bird', 'whale', 'sapient']);
 
 // trophic modes
-export const TROPHIC = { CHEMO: 0, PHOTO: 1, DECOMP: 2, GRAZER: 3, PREDATOR: 4, OMNI: 5 };
-export const TROPHIC_NAMES = ['Chemotroph', 'Photosynthesiser', 'Decomposer', 'Grazer', 'Predator', 'Omnivore'];
+export const TROPHIC = { CHEMO: 0, PHOTO: 1, DECOMP: 2, GRAZER: 3, PREDATOR: 4, OMNI: 5, PARASITE: 6 };
+export const TROPHIC_NAMES = ['Chemotroph', 'Photosynthesiser', 'Decomposer', 'Grazer', 'Predator', 'Omnivore', 'Parasite'];
 export const HABITAT_NAMES = ['Marine', 'Coastal', 'Land', 'Freshwater'];
 // prey pools that a species' biomass counts toward
 const POOL = { NONE: -1, MICRO: 0, PROD: 1, HERB: 2 };
@@ -127,8 +127,10 @@ const GROUP_CAP = { bacteria: 8, archaea: 6, protist: 8, plant: 10, fungus: 8, a
 const GRADE_CAP = { insect: 22, fish: 16, arthropod: 14, sponge: 7, jelly: 7, cyano: 7 };
 // how common a species is for its habitat: rivers and lakes are small, so their species are
 // judged against that when competition decides who is squeezed out
-const abundance = (sp) => sp.total * (sp.habitat === 3 ? 12 : 1);
-const capOf = (grade) => GRADE_CAP[grade] ?? GROUP_CAP[GRADES[grade].kingdom];
+const abundance = (sp) => sp.total * (sp.habitat === 3 ? 6 : 1) * (sp.trophic === 6 ? 30 : 1);
+// parasites are counted as their own group (parasitic worms apart from free-living ones)
+const gkey = (sp) => (sp.trophic === 6 ? sp.grade + '*' : sp.grade);
+const capOf = (key) => (key.endsWith('*') ? 10 : GRADE_CAP[key] ?? GROUP_CAP[GRADES[key].kingdom]);
 
 // how strongly mate choice drives speciation (birds and fish are famous for it)
 // (scaled by each species' display gene: showy colours, songs and dances)
@@ -137,6 +139,7 @@ const SEXUAL_SELECTION = { bird: 2, fish: 1.5, insect: 1, mammal: 0.8, reptile: 
 
 // icon variants within a grade (by diet and size)
 function pickIcon(g, trophic, size, habitat = 0) {
+  if (trophic === TROPHIC.PARASITE) return g === 'insect' || g === 'arachnid' || g === 'arthropod' ? '🦟' : g === 'worm' ? '🪱' : g === 'protist' ? '🦠' : GRADES[g].icon;
   if (g === 'mollusc') return habitat === 0 ? '🐚' : '🐌';
   if (g === 'squid') return size > 0.45 ? '🦑' : '🐙';
   if (g === 'worm') return habitat === 0 && trophic === TROPHIC.PREDATOR ? '🪱' : '🪱';
@@ -206,6 +209,13 @@ export class Ecosystem {
     this.tKing = new Int8Array(MAXT);
     this.tDry = new Float32Array(MAXT); this.tVuln = new Float32Array(MAXT).fill(1);
     this.tSucc = new Float32Array(MAXT); this.tClimb = new Float32Array(MAXT); this.tRock = new Uint8Array(MAXT);
+    this.tCoral = new Uint8Array(MAXT); this.tRoots = new Uint8Array(MAXT);
+    // the food web: how much each predator prefers each prey (by size), and recent flows of food
+    // from prey to predator and from host to parasite, for finding keystone species
+    this.link = new Float32Array(MAXT * MAXT);
+    this.flow = new Float32Array(MAXT * MAXT);
+    this.webDirty = true;
+    this.pendingCascades = [];
     this.groupOrigins = {}; // kind of life -> number of independent origins
     this.tHost = new Int16Array(MAXT).fill(-1);
     this.tDraw = new Float32Array(MAXT).fill(1); // share of food taken from the wild (farming lowers it) // specialist herbivores: slot of their host plant
@@ -395,6 +405,8 @@ export class Ecosystem {
     this.tO2[s] = p.o2; this.tDisp[s] = p.disp; this.tSelf[s] = p.self * (sp.sexual ? 0.75 : 1);
     this.tDry[s] = p.dry; this.tVuln[s] = p.vuln;
     this.tSucc[s] = p.succ || 0; this.tClimb[s] = p.climb || 0; this.tRock[s] = p.rock ? 1 : 0;
+    this.tCoral[s] = p.coral ? 1 : 0; this.tRoots[s] = p.roots ? 1 : 0;
+    this.webDirty = true;
     // behaviour evolved by individuals (when you dive into a zone): better foragers and hunters
     // eat more, and animals that flee or crowd together are harder to catch
     if (sp.brain && ph.animal) {
@@ -406,7 +418,7 @@ export class Ecosystem {
     // specialists are efficient on their one host plant and can't use anything else
     const host = sp.host ? this.species.get(sp.host) : null;
     this.tHost[s] = host && host.died < 0 ? host.slot : -1;
-    if (this.tHost[s] >= 0) { this.tImax[s] *= 1.35; this.tHalf[s] *= 0.4; }
+    if (this.tHost[s] >= 0 && sp.trophic !== T.PARASITE) { this.tImax[s] *= 1.35; this.tHalf[s] *= 0.4; }
     // what it eats depends on its body: single cells and filter-feeders eat microbes
     this.wChem[s] = this.wMicro[s] = this.wProd[s] = this.wHerb[s] = this.wDet[s] = 0;
     const micro = ph.level <= 1, filter = ph.animal && (ph.level === 2 || ph.radial || !ph.motile);
@@ -427,6 +439,7 @@ export class Ecosystem {
     // what eats it: microbes are grazed, plants browsed, and animals hunted unless they are
     // big backboned predators at the top of the food chain
     if (sp.trophic === T.PHOTO) this.tPool[s] = POOL.PROD;
+    else if (sp.trophic === T.PARASITE) this.tPool[s] = POOL.NONE;
     else if (micro && sp.kingdom !== 'plant') this.tPool[s] = POOL.MICRO;
     else if (ph.animal && (sp.trophic !== T.PREDATOR || ph.skeleton !== 'endo' || ph.size < 0.45)) this.tPool[s] = POOL.HERB;
     else this.tPool[s] = POOL.NONE;
@@ -454,11 +467,16 @@ export class Ecosystem {
     for (const s of this.alive) {
       const q = this.slots[s];
       if (q.host !== sp.id) continue;
-      const kin = this.alive.map((t) => this.slots[t]).filter((t) => t.grade === sp.grade && t.habitat !== 0);
+      const kin = this.alive.map((t) => this.slots[t]).filter((t) => t.grade === sp.grade && t.trophic !== TROPHIC.PARASITE);
       q.host = kin.length ? kin.sort((a, b) => Math.abs(a.pref - q.pref) - Math.abs(b.pref - q.pref))[0].id : 0;
       this.setParams(q);
     }
     if (sp.peakRange >= 6) this.onEvent({ type: 'extinction', species: sp });
+    // forget the food flows through this slot; a new species will take it over
+    for (let k = 0; k < MAXT; k++) { this.flow[slot * MAXT + k] = 0; this.flow[k * MAXT + slot] = 0; }
+    // a keystone predator gone: watch what happens to the prey it held in check
+    if (sp.keystone) this.pendingCascades.push({ pred: sp, tick: this.tick, prey: sp.keystone.map((id) => ({ id, total: this.species.get(id)?.total || 0 })) });
+    this.webDirty = true;
   }
 
   // introduce a species into a zone and its neighbours
@@ -561,12 +579,18 @@ export class Ecosystem {
     this.years = years;
     const P = this.planet, B = this.B, Z = this.Z, alive = this.alive;
     const o2 = P.o2, ozone = P.ozone;
-    const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing, tHost, tDry, tVuln, tSucc, tClimb, tRock } = this;
+    const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing, tHost, tDry, tVuln, tSucc, tClimb, tRock, tCoral, tRoots } = this;
+    if (this.webDirty) this.buildLinks();
+    const link = this.link, flow = this.flow;
+    const loss = this._loss || (this._loss = new Float32Array(MAXT));
+    const preyList = this._preyList || (this._preyList = new Uint8Array(MAXT));
+    // corals need algae to partner with; roots need bacteria
+    const algaeOK = this.gradeAlive('algae') || this.gradeAlive('diatom') || this.gradeAlive('cyano') ? 1 : 0;
     // which species build reefs (1) or forests (2)
     const engineer = this._eng || (this._eng = new Uint8Array(MAXT));
     for (const s of alive) {
       const sp = this.slots[s];
-      engineer[s] = sp.grade === 'sponge' && sp.habitat === 0 ? 1 : (sp.grade === 'fern' || sp.grade === 'conifer' || sp.grade === 'flower') && sp.size > 0.45 ? 2 : 0;
+      engineer[s] = sp.grade === 'sponge' && sp.habitat === 0 && tCoral[s] ? 1 : (sp.grade === 'fern' || sp.grade === 'conifer' || sp.grade === 'flower') && sp.size > 0.45 ? 2 : 0;
     }
     const total = this.total, range = this.range, sumT = this.sumT, pres = this.pres, presN = this.presN;
     const sumN2 = this.sumN2 || (this.sumN2 = new Float32Array(MAXT)), sumA = this.sumA || (this.sumA = new Float32Array(MAXT));
@@ -590,10 +614,9 @@ export class Ecosystem {
     for (let z = 0; z < Z; z++) {
       const base = z * MAXT;
       const zs = this.zSea[z], zl = this.zLand[z];
-      // food pools by habitat (sea, land)
-      // herbS/herbL count prey animals weighted by how easy they are to catch (size, armour,
-      // speed and wings protect them), so well-defended prey are both safer and poorer food
-      let microS = 0, microL = 0, prodS = 0, prodL = 0, prodF = 0, herbS = 0, herbL = 0, fungL = 0, decS = 0, decL = 0, reef = 0, forest = 0;
+      // food pools by habitat (sea, land) for microbes, plants and dead matter; animals that can be
+      // eaten are listed individually, because predators choose their prey
+      let microS = 0, microL = 0, prodS = 0, prodL = 0, prodF = 0, fungL = 0, decS = 0, decL = 0, reef = 0, forest = 0, np = 0;
       let any = false;
       const nP = presN[z];
       for (let a = 0; a < nP; a++) {
@@ -604,7 +627,7 @@ export class Ecosystem {
         const p = tPool[s];
         if (p === 0) { const v = b * tVuln[s]; microS += v * hs; microL += v * hl; }
         else if (p === 1) { prodS += b * hs; prodL += b * hl; if (h === 3) prodF += b; }
-        else if (p === 2) { const v = b * tVuln[s]; herbS += v * hs; herbL += v * hl; }
+        else if (p === 2) preyList[np++] = s;
         if (tTroph[s] === 2) { decS += b * hs; decL += b * hl; if (tKing[s] === fungK) fungL += b * hl; }
         const ge = engineer[s];
         if (ge === 1) reef += b; else if (ge === 2) forest += b;
@@ -620,7 +643,7 @@ export class Ecosystem {
       const struct = Math.min(1, (this.zDs[z] < 0.35 ? reef / 0.02 : 0) * 0.6 + forest / (0.4 * Math.max(0.05, this.zKl[z])));
       this.zStruct[z] = struct;
       const coexist = 1 - 0.45 * struct;
-      let cMicroS = 0, cMicroL = 0, cProdS = 0, cProdL = 0, cHerbS = 0, cHerbL = 0, cDetS = 0, cDetL = 0, cChem = 0;
+      let cMicroS = 0, cMicroL = 0, cProdS = 0, cProdL = 0, cDetS = 0, cDetL = 0, cChem = 0;
       let deadS = 0, deadL = 0;
 
       for (let a = 0; a < nP; a++) {
@@ -634,7 +657,9 @@ export class Ecosystem {
         // habitat shrinking under them (sea level, ice)
         const room = h === 0 ? zs : h === 2 ? zl : h === 3 ? Math.min(1, 0.2 + 6 * this.zFw[z]) : Math.min(1, 4 * Math.min(zs, zl));
         if (room < 0.03) mort += 0.2;
-        if (b < 3e-4) mort += 0.04; // Allee effect: tiny populations struggle to find mates and recover
+        // Allee effect: tiny populations struggle to find mates and recover (parasites are always
+        // small by weight, but they live packed inside their hosts)
+        if (b < 3e-4 && tTroph[s] !== 6) mort += 0.04;
         if (tKing[s] === archK) mort += archO2;
         let nb;
         if (tTroph[s] === 1) {
@@ -644,28 +669,66 @@ export class Ecosystem {
           let kl = h === 3 ? this.zKf[z] * nutL
             : KL * (1 + tSucc[s] * (2.4 * Math.max(0, 0.45 - dryness) - 0.8 * Math.max(0, dryness - 0.4))) * (1 + 1.5 * tClimb[s] * struct);
           if (tRock[s]) kl = Math.max(kl, 0.12 * zl);
-          const K = (hs * KS + hl * kl * (pollinators || this.slots[s].grade !== 'flower' ? 1 : 0.6)) * tK[s] * (this.pollinated[s] ? 1.15 : 1);
+          const K = (hs * KS + hl * kl * (pollinators || this.slots[s].grade !== 'flower' ? 1 : 0.6)) * tK[s] * (this.pollinated[s] ? 1.15 : 1) * (tRoots[s] ? 1.2 : 1);
           // (water plants compete for light only with each other, not with the forest on the bank)
           const crowd = h === 3 ? prodF : hs * prodS + hl * (prodL - prodF);
           nb = b + tR[s] * b * (suit * o2f - crowd / (K + 1e-6)) - mort * 0.3 * b;
           prodTotal += b;
           if (h > 0) landProd += b * hl;
+        } else if (tTroph[s] === 6) {
+          // a parasite feeds on its one host species where the two live together
+          const hostSlot = tHost[s];
+          const F = hostSlot >= 0 ? B[base + hostSlot] : 0;
+          const I = F > 0 ? tImax[s] * F / (F + tHalf[s]) : 0;
+          // (the host's immune defences grow with the parasite load, so parasites stay a modest
+          // share of their host; where the host is missing they die out)
+          nb = b + b * (tE[s] * I * suit * o2f - mort - tSelf[s] * b / (F + 1e-4));
+          if (I > 0) { const eat = b * I; loss[hostSlot] += eat; flow[s * MAXT + hostSlot] += eat; }
         } else {
           const own = b;
           const fMicro = wMicro[s] * Math.max(0, hs * microS + hl * microL - (tPool[s] === 0 ? own * tVuln[s] : 0));
           const hostSlot = tHost[s];
           const fProd = wProd[s] * (hostSlot >= 0 ? B[base + hostSlot] : hs * prodS + hl * prodL);
-          const fHerb = wHerb[s] * Math.max(0, hs * herbS + hl * herbL - (tPool[s] === 2 ? own * tVuln[s] : 0));
+          // prey: each predator prefers prey of a size it can handle, and well-defended prey (big,
+          // armoured, fast, flying) are both safer and poorer food
+          let fHerb = 0;
+          if (wHerb[s] > 0) {
+            const row = s * MAXT;
+            for (let k = 0; k < np; k++) {
+              const q = preyList[k], l = link[row + q];
+              if (l === 0) continue;
+              const hq = tHab[q], qs = hq === 0 ? 1 : hq === 1 ? 0.5 : 0;
+              fHerb += l * B[base + q] * tVuln[q] * (hs * qs + hl * (1 - qs));
+            }
+            fHerb *= wHerb[s];
+          }
           const fDet = wDet[s] * (hs * detS + hl * detL);
           const fChem = wChem[s] * org * hs;
           const F = fMicro + fProd + fHerb + fDet + fChem;
           const I = F > 0 ? tImax[s] * F / (F + tHalf[s]) : 0;
-          nb = b + b * (tE[s] * I * suit * o2f - mort - tSelf[s] * coexist * b);
+          // corals feed partly on sugar from the algae in their tissues, in sunlit shallows, but
+          // too much heat makes them expel the algae (bleaching)
+          let extra = 0;
+          if (tCoral[s]) {
+            extra = algaeOK * 0.06 * Math.min(1, this.zKs[z] * 2) * (this.zDs[z] < 0.35 ? 1 : 0.3);
+            const heat = (this.zTs[z] - tPref[s]) / tTol[s] - 0.8;
+            if (heat > 0) { mort += 0.15 * heat; extra *= Math.max(0, 1 - heat); }
+          }
+          nb = b + b * (tE[s] * I * suit * o2f + extra * suit - mort - tSelf[s] * coexist * b);
           if (F > 0) {
             const eat = (b * I / F) * this.tDraw[s];
             cMicroS += eat * fMicro * hs; cMicroL += eat * fMicro * hl;
             cProdS += eat * fProd * hs; cProdL += eat * fProd * hl;
-            cHerbS += eat * fHerb * hs; cHerbL += eat * fHerb * hl;
+            if (fHerb > 0) {
+              const k2 = eat * wHerb[s], row = s * MAXT;
+              for (let k = 0; k < np; k++) {
+                const q = preyList[k], l = link[row + q];
+                if (l === 0) continue;
+                const hq = tHab[q], qs = hq === 0 ? 1 : hq === 1 ? 0.5 : 0;
+                const take = k2 * l * B[base + q] * tVuln[q] * (hs * qs + hl * (1 - qs));
+                loss[q] += take; flow[row + q] += take;
+              }
+            }
             cDetS += eat * fDet * hs; cDetL += eat * fDet * hl;
             cChem += eat * fChem;
           }
@@ -679,20 +742,23 @@ export class Ecosystem {
       const f = (c, pool) => (pool > 0 ? Math.max(0, 1 - c / pool) : 1);
       const fmS = f(cMicroS, microS), fmL = f(cMicroL, microL);
       const fpS = f(cProdS, prodS), fpL = f(cProdL, prodL);
-      const fhS = f(cHerbS, herbS), fhL = f(cHerbL, herbL);
       let pS = 0, pL = 0, kmask = 0, w = 0;
       for (let a = 0; a < nP; a++) {
         const s = pres[base + a];
         let nb = newB[s];
+        const ls = loss[s];
+        loss[s] = 0;
         if (nb === 0) { B[base + s] = 0; continue; }
+        // eaten by its own predators and parasites (a few always escape into refuges)
+        if (ls > 0) nb = Math.max(nb * 0.05, nb - ls);
         const p = tPool[s];
         if (p >= 0) {
           const h = tHab[s], hs = h === 0 ? 1 : h === 1 ? 0.5 : 0, hl = 1 - hs;
-          if (p === 2 || p === 0) {
-            // prey losses fall hardest on the easiest to catch
-            const v = tVuln[s], fS = p === 2 ? fhS : fmS, fL = p === 2 ? fhL : fmL;
-            nb *= hs * Math.max(0, 1 - v * (1 - fS)) + hl * Math.max(0, 1 - v * (1 - fL));
-          } else nb *= hs * fpS + hl * fpL;
+          if (p === 0) {
+            // microbe losses fall hardest on the easiest to catch
+            const v = tVuln[s];
+            nb *= hs * Math.max(0, 1 - v * (1 - fmS)) + hl * Math.max(0, 1 - v * (1 - fmL));
+          } else if (p === 1) nb *= hs * fpS + hl * fpL;
           if (p === 1) { pS += nb * hs; pL += nb * hl; }
           if (nb < EXTINCT) nb = 0;
         }
@@ -730,35 +796,40 @@ export class Ecosystem {
 
   disperse() {
     const B = this.B, zg = this.zgrid, pres = this.pres, presN = this.presN, Z = this.Z;
-    const ok = this._okCache || (this._okCache = new Uint8Array(Z * 3));
-    for (let z = 0; z < Z; z++) for (let h = 0; h < 3; h++) ok[z * 3 + h] = this.habitatOk(h, z) ? 1 : 0;
+    const ok = this._okCache || (this._okCache = new Uint8Array(Z * 4));
+    for (let z = 0; z < Z; z++) for (let h = 0; h < 4; h++) ok[z * 4 + h] = this.habitatOk(h, z) ? 1 : 0;
     const recZ = this._recZ || (this._recZ = new Int32Array(Z * MAXT));
     const recS = this._recS || (this._recS = new Uint8Array(Z * MAXT));
     const recA = this._recA || (this._recA = new Float32Array(Z * MAXT));
+    const recH = this._recH || (this._recH = new Int16Array(Z * MAXT));
     let n = 0;
     // emigration is computed from pre-dispersal populations...
     for (let z = 0; z < Z; z++) {
       const base = z * MAXT, k0 = zg.nbrStart[z], k1 = zg.nbrStart[z + 1];
       for (let a = 0; a < presN[z]; a++) {
         const s = pres[base + a], b = B[base + s];
-        if (b < 1e-4) continue;
+        if (b < (this.tTroph[s] === 6 ? 2e-6 : 1e-4)) continue;
         const h = this.tHab[s];
         let cnt = 0;
-        for (let k = k0; k < k1; k++) if (ok[zg.nbr[k] * 3 + h]) cnt++;
+        const host = this.tTroph[s] === 6 ? this.tHost[s] : -1;
+        const fits = (q) => ok[q * 4 + h] && (host < 0 || B[q * MAXT + host] > 1e-4); // parasites only spread to their hosts
+        for (let k = k0; k < k1; k++) if (fits(zg.nbr[k])) cnt++;
         if (!cnt) continue;
         // dispersal rises with crowding: sparse populations mostly stay put instead of
         // smearing themselves too thin to breed (runs every 4th tick)
-        const out = b * Math.min(0.5, this.tDisp[s] * 4) * (b / (b + 0.0015));
+        // (parasites travel inside their hosts, so they spread even when few)
+        const out = b * Math.min(0.5, this.tDisp[s] * 4) * (this.tTroph[s] === 6 ? 1 : b / (b + 0.0015));
         B[base + s] = b - out;
         recZ[n] = z; recS[n] = s; recA[n] = out / cnt; n++;
+        recH[n - 1] = host + 1;
       }
     }
     // ...then settles in neighbouring zones that offer the right habitat
     for (let r = 0; r < n; r++) {
-      const z = recZ[r], s = recS[r], share = recA[r], h = this.tHab[s];
+      const z = recZ[r], s = recS[r], share = recA[r], h = this.tHab[s], host = recH[r] - 1;
       for (let k = zg.nbrStart[z]; k < zg.nbrStart[z + 1]; k++) {
         const q = zg.nbr[k];
-        if (ok[q * 3 + h]) this.addB(q, s, share);
+        if (ok[q * 4 + h] && (host < 0 || B[q * MAXT + host] > 1e-4)) this.addB(q, s, share);
       }
     }
   }
@@ -769,7 +840,7 @@ export class Ecosystem {
     const gradeCounts = {}, bins = new Map();
     for (const s of this.alive) {
       const sp = this.slots[s];
-      gradeCounts[sp.grade] = (gradeCounts[sp.grade] || 0) + 1;
+      gradeCounts[gkey(sp)] = (gradeCounts[gkey(sp)] || 0) + 1;
       const k = (sp._bin = nicheKey(sp)); // fixed for this pass; adaptation may shift the niche below
       if (!bins.has(k)) bins.set(k, []);
       bins.get(k).push(sp);
@@ -787,7 +858,8 @@ export class Ecosystem {
       if (sp.total > sp.peak) sp.peak = sp.total;
       // too rare to persist: a few scattered stragglers don't make a viable species
       // (lake and river species are naturally confined to a few places, so they get more leeway)
-      if (sp.total < 2e-4 || (sp.total < 3e-3 && sp.range <= (sp.habitat === 3 ? 1 : 3) && this.tick - sp.born > 150)) { this.extinct(s); continue; }
+      const ab = abundance(sp);
+      if (ab < 2e-4 || (ab < 3e-3 && sp.range <= (sp.habitat === 3 ? 1 : 3) && this.tick - sp.born > 150)) { this.extinct(s); continue; }
       // a new kind of life counts once it has taken hold, not when a doomed first mutant appears
       if (!sp.estab && sp.range >= 4 && this.tick - sp.born > 25) this.establish(sp);
       // anagenesis: populations adapt to the temperatures they actually live in
@@ -804,8 +876,8 @@ export class Ecosystem {
       if (nA >= SPEC_CAP || sp.grade === 'sapient') continue;
       const rangeF = Math.max(0.2, Math.min(2.5, sp.range / 25));
       // diversity-dependent diversification: species packed into the same niche split more slowly
-      const nB = bins.get(sp._bin)?.length ?? 1, nG = gradeCounts[sp.grade];
-      const gCap = capOf(sp.grade);
+      const nB = bins.get(sp._bin)?.length ?? 1, nG = gradeCounts[gkey(sp)];
+      const gCap = capOf(gkey(sp));
       const crowded = Math.exp(-(nB - 1) / 2) * (nG > gCap ? Math.exp(-(nG - gCap) / 4) : 1) * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 25) : 1);
       const pSpec = 0.0009 * this.mutationRate * rangeF * (sp.sexual ? 1.5 : 1) * crowded * opp;
       if (rng() < pSpec) this.speciate(sp, sp.grade);
@@ -829,19 +901,29 @@ export class Ecosystem {
       let worst = null;
       for (const s of this.alive) {
         const sp = this.slots[s];
-        if (sp.grade === g && g !== 'sapient' && this.tick - sp.born > 100 && (!worst || abundance(sp) < abundance(worst))) worst = sp;
+        if (gkey(sp) === g && g !== 'sapient' && this.tick - sp.born > 100 && (!worst || abundance(sp) < abundance(worst))) worst = sp;
       }
       if (worst) { worst.outcompeted = true; this.extinct(worst.slot); }
     }
     // Colonising fresh water: now and then a population living beside a river or lake founds a
     // freshwater species (most fail; the ones that fit the river or lake spread along it)
-    if (nA < SPEC_CAP && rng() < 0.01 * this.transitionRate * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 30) : 1)) {
+    if (nA < SPEC_CAP && rng() < 0.005 * this.transitionRate * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 30) : 1)) {
       const sp = this.slots[this.alive[Math.floor(rng() * nA)]];
       if (sp && sp.habitat !== 3 && sp.grade !== 'sapient' && sp.grade !== 'lichen' && sp.grade !== 'whale') {
         const z = this.pickZone(sp, (q) => this.habitatOk(3, q));
         if (z >= 0) this.speciate(sp, sp.grade, z, null, 'colonise');
       }
     }
+    // New parasites: now and then a protist, fungus, worm or small arthropod population takes to
+    // living on an abundant host nearby. Parasitism has evolved hundreds of times on Earth.
+    if (nA < SPEC_CAP && rng() < 0.025 * this.transitionRate * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 30) : 1)) {
+      const sp = this.slots[this.alive[Math.floor(rng() * nA)]];
+      const ph = sp?.ph;
+      const able = ph && ph.euk && !ph.photo && sp.trophic !== TROPHIC.PARASITE && ph.skeleton !== 'endo' && !ph.lichen &&
+        (ph.level <= 1 || ph.fungus || (ph.animal && (ph.skeleton === 'none' || ph.size < 0.2)));
+      if (able) { const z = this.pickZone(sp); if (z >= 0) this.speciate(sp, sp.grade, z, null, 'parasite'); }
+    }
+    if (this.tick % 50 === 0) this.analyseWeb();
     // Background turnover: a crowded biosphere keeps losing its rarest species, so there is always
     // room for new ones and evolution never stalls at the species limit
     if (nA > SOFT_CAP + 10 && rng() < 0.012 * (nA - SOFT_CAP - 10) / 10) {
@@ -956,8 +1038,8 @@ export class Ecosystem {
 
   // how much room a species' niche and group leave for a new species (1 = plenty)
   crowding(sp) {
-    const nB = this._bins?.get(sp._bin)?.length ?? 1, nG = this._gradeCounts?.[sp.grade] ?? 1;
-    const gCap = capOf(sp.grade), nA = this.alive.length;
+    const nB = this._bins?.get(sp._bin)?.length ?? 1, nG = this._gradeCounts?.[gkey(sp)] ?? 1;
+    const gCap = capOf(gkey(sp)), nA = this.alive.length;
     return Math.exp(-(nB - 1) / 2) * (nG > gCap ? Math.exp(-(nG - gCap) / 4) : 1) * (nA > SOFT_CAP ? Math.exp(-(nA - SOFT_CAP) / 25) : 1);
   }
 
@@ -1042,6 +1124,9 @@ export class Ecosystem {
       genes[GI.hue] = (genes[GI.hue] + 0.15 + 0.2 * rng()) % 1;
     } else if (mode === 'colonise') {
       habitat = 3;
+    } else if (mode === 'parasite') {
+      genes[GI.parasitism] = 0.7 + 0.2 * rng();
+      genes[GI.size] *= 0.6;
     } else if (mode === 'innovation') {
       const before = genes[GI.landAdapt];
       const gene = innovate(genes, sp, sp.ph, rng);
@@ -1093,14 +1178,28 @@ export class Ecosystem {
     // a new body plan brings a new climate tolerance with it (warm blood, a brain…)
     if (child.grade !== sp.grade) { child.tol = Math.max(3, Math.min(30, 0.5 * (child.tol + child.eco.tol))); this.setParams(child); }
     child.host = transition ? 0 : this.chooseHost(sp, child, z);
+    // a parasite lives wherever its host does
+    if (child.trophic === TROPHIC.PARASITE && child.host) {
+      // a parasite lives inside its host, so it shares the host's habitat and climate
+      const host = this.species.get(child.host);
+      Object.assign(child, { habitat: host.habitat, pref: host.pref, tol: Math.max(child.tol, host.tol), n2: host.n2, n2tol: host.n2tol, alt: host.alt, altTol: host.altTol });
+      this.develop(child); this.refreshSuit(child.slot);
+    }
     if (child.host) this.setParams(child);
     if (sexualSel) child.display = true;
     // the founding population: part of the parent's local population becomes the new species
     const zg = this.zgrid;
     const big = transition || mode === 'innovation' || child.grade !== sp.grade;
+    const hostSlot = child.trophic === TROPHIC.PARASITE && child.host ? this.species.get(child.host)?.slot : -1;
     const take = (q, frac) => {
       const pb = this.B[q * MAXT + sp.slot];
       if (pb <= 0) return;
+      // a new parasite starts small, only where its host lives
+      if (child.trophic === TROPHIC.PARASITE) {
+        const hb = hostSlot >= 0 ? this.B[q * MAXT + hostSlot] : 0;
+        if (hb > 0) this.addB(q, child.slot, Math.min(pb * frac, hb * 0.05));
+        return;
+      }
       const amt = pb * frac;
       if (habitat === sp.habitat) this.B[q * MAXT + sp.slot] -= amt;
       if (this.habitatOk(habitat, q)) this.addB(q, child.slot, Math.max(amt, big ? 0.01 : 0));
@@ -1121,6 +1220,10 @@ export class Ecosystem {
   // already evolved elsewhere from a different ancestor, that is convergent evolution.
   establish(sp) {
     sp.estab = true;
+    // firsts in the web of life
+    if (sp.trophic === TROPHIC.PARASITE && !this.innovations.has('parasites')) { this.innovations.add('parasites'); this.onEvent({ type: 'firstof', key: 'parasites', species: sp }); }
+    if (sp.ph?.partner === 'algae' && !this.innovations.has('corals')) { this.innovations.add('corals'); this.onEvent({ type: 'firstof', key: 'corals', species: sp }); }
+    if (sp.ph?.partner === 'gut' && !this.innovations.has('gut')) { this.innovations.add('gut'); this.onEvent({ type: 'firstof', key: 'gut', species: sp }); }
     // the first life to settle in rivers and lakes
     if (sp.habitat === 3 && !this.innovations.has('freshwater')) {
       this.innovations.add('freshwater');
@@ -1146,13 +1249,14 @@ export class Ecosystem {
     const novelSource = !from.includes(parent.grade);
     if (novelSource) from.push(parent.grade);
     if (first) this.onEvent({ type: 'newgroup', species: sp, parent, grade: sp.grade });
-    else if (!sp.merger && novelSource) this.onEvent({ type: 'convergent', species: sp, parent, grade: sp.grade, count: n });
+    else if (!sp.merger && novelSource && n > 1) this.onEvent({ type: 'convergent', species: sp, parent, grade: sp.grade, count: n });
   }
 
   // Specialist herbivores: insects (and other land arthropods) may specialise on one plant
   // species, inheriting their parent's host or switching to another plant growing nearby.
   chooseHost(parent, child, z) {
     const grade = child.grade;
+    if (child.trophic === TROPHIC.PARASITE) return this.chooseParasiteHost(parent, child, z);
     if (!(grade === 'insect' || (grade === 'arthropod' && child.habitat !== 0)) || child.trophic !== TROPHIC.GRAZER) return 0;
     const rng = this.rng;
     const inherited = parent.host && this.species.get(parent.host)?.died < 0 ? parent.host : 0;
@@ -1166,10 +1270,33 @@ export class Ecosystem {
     return plants.length ? plants[Math.floor(rng() * plants.length)].id : inherited;
   }
 
-  // Cospeciation: when a host plant splits, its specialists often split with it
-  // (the matching family trees of figs and fig wasps are a famous example).
+  // A parasite keeps its parent's host, or now and then jumps to another host living nearby
+  // (most new diseases start this way). Hosts are complex plants and animals, chosen by abundance.
+  chooseParasiteHost(parent, child, z) {
+    const rng = this.rng;
+    const inherited = parent.trophic === TROPHIC.PARASITE && parent.host && this.species.get(parent.host)?.died < 0 ? parent.host : 0;
+    if (inherited && rng() < 0.75) return inherited;
+    const fungal = child.kingdom === 'fungus';
+    let tot = 0;
+    const cands = [];
+    for (let a = 0; a < this.presN[z]; a++) {
+      const s = this.pres[z * MAXT + a], q = this.slots[s];
+      if (!q || q === child || !q.ph || q.ph.level < 2 || q.trophic === TROPHIC.PARASITE || q.grade === 'lichen') continue;
+      const b = this.B[z * MAXT + s];
+      if (b < 1e-3) continue;
+      // fungi mostly attack plants, the rest mostly animals
+      const w = b * (q.kingdom === 'plant' ? (fungal ? 1 : 0.15) : q.kingdom === 'animal' ? (fungal ? 0.3 : 1) : 0.1);
+      cands.push([q, w]); tot += w;
+    }
+    if (!tot) return inherited;
+    let r = rng() * tot;
+    for (const [q, w] of cands) { r -= w; if (r <= 0) return q.id; }
+    return cands[cands.length - 1][0].id;
+  }
+
+  // Cospeciation: when a host splits, its specialists and parasites often split with it (the
+  // matching family trees of figs and fig wasps, or of lice and their birds).
   cospeciate(parentPlant, childPlant, zones) {
-    if (parentPlant.kingdom !== 'plant' || childPlant.kingdom !== 'plant') return;
     for (const s of this.alive.slice()) {
       const q = this.slots[s];
       if (!q || q.host !== parentPlant.id || this.rng() > 0.35 || this.alive.length >= MAXT - 5) continue;
@@ -1182,8 +1309,110 @@ export class Ecosystem {
       this.B[z * MAXT + s] -= amt;
       this.addB(z, kid.slot, Math.max(amt, 2e-4));
       kid.cospeciated = true;
+      if (kid.trophic === TROPHIC.PARASITE) kid.host = childPlant.id, this.setParams(kid);
       this.onEvent({ type: 'cospeciation', species: kid, parent: q, host: childPlant });
     }
+  }
+
+  // Who prefers to eat whom. Predators take prey of a size they can handle: hunters about a
+  // third of their own size, filter-feeders much smaller animals. (Defences and where each lives
+  // are applied when they meet.)
+  buildLinks() {
+    this.webDirty = false;
+    const L = this.link, alive = this.alive;
+    L.fill(0);
+    for (const s of alive) {
+      if (this.wHerb[s] === 0) continue;
+      const pred = this.slots[s], ph = pred.ph;
+      const centre = ph && (ph.level === 2 || ph.radial || !ph.motile) ? -2.2 : -1.0;
+      const ps = (pred.size || 0) + 0.04;
+      for (const q of alive) {
+        if (q === s || this.tPool[q] !== 2) continue;
+        const r = Math.log((this.slots[q].size + 0.04) / ps) - centre;
+        L[s * MAXT + q] = Math.exp(-0.5 * (r / 0.85) ** 2);
+      }
+    }
+  }
+
+  // Every 50 ticks: which predators hold their prey in check (keystone species), and whether
+  // losing one set off a trophic cascade
+  analyseWeb() {
+    const F = this.flow, alive = this.alive;
+    const inflow = new Float32Array(MAXT);
+    for (const p of alive) for (const q of alive) inflow[q] += F[p * MAXT + q];
+    const animals = alive.map((s) => this.slots[s]).filter((q) => q.ph?.animal && q.trophic !== TROPHIC.PARASITE).map((q) => q.total).sort((a, b) => a - b);
+    const common = animals.length ? animals[Math.floor(animals.length * 0.6)] : Infinity;
+    for (const p of alive) {
+      const sp = this.slots[p];
+      sp.keystone = null;
+      if (sp.trophic === TROPHIC.PARASITE || this.wHerb[p] === 0 || sp.range < 15) continue;
+      const held = [];
+      for (const q of alive) {
+        const f = F[p * MAXT + q];
+        if (f > 0 && f > 0.5 * inflow[q] && this.slots[q].total >= common) held.push(this.slots[q].id);
+      }
+      if (held.length) sp.keystone = held;
+    }
+    for (let i = 0; i < F.length; i++) F[i] *= 0.5;
+    // cascades: prey released from their keystone predator boom
+    this.pendingCascades = this.pendingCascades.filter((c) => {
+      if (this.tick - c.tick < 150) return true;
+      let best = null, ratio = 1;
+      for (const { id, total } of c.prey) {
+        const q = this.species.get(id);
+        if (!q || q.died >= 0 || !total) continue;
+        if (q.total / total > ratio) { ratio = q.total / total; best = q; }
+      }
+      if (best && ratio > 1.5) this.onEvent({ type: 'cascade', species: c.pred, prey: best, ratio });
+      return false;
+    });
+  }
+
+  // The food web of one zone, for the food-web view: who lives here and who eats whom.
+  webOf(z) {
+    const B = this.B, base = z * MAXT, nodes = [], links = [];
+    const at = new Map();
+    for (let a = 0; a < this.presN[z]; a++) {
+      const s = this.pres[base + a], sp = this.slots[s], b = B[base + s];
+      if (!sp || b < 1e-4) continue;
+      at.set(s, nodes.length);
+      nodes.push({ sp, b, slot: s });
+    }
+    const habOf = (s) => { const h = this.tHab[s]; return h === 0 ? 1 : h === 1 ? 0.5 : 0; };
+    const add = (from, to, f, kind) => { if (f > 0) links.push({ from, to, f, kind }); };
+    const extra = { det: null, chem: null };
+    for (const n of nodes) {
+      const s = n.slot, sp = n.sp, hs = habOf(s), hl = 1 - hs;
+      if (sp.trophic === 1) continue;
+      const parts = [];
+      if (sp.trophic === TROPHIC.PARASITE) {
+        const h = this.tHost[s];
+        if (at.has(h)) add(at.get(h), at.get(s), B[base + h] * n.b, 'parasite');
+        continue;
+      }
+      if (this.wChem[s]) { extra.chem ??= nodes.length + 1000; add('chem', at.get(s), this.wChem[s] * this.zOrg[z] * n.b, 'eat'); }
+      if (this.wDet[s]) { add('det', at.get(s), this.wDet[s] * (hs * this.detS[z] + hl * this.detL[z]) * n.b, 'eat'); }
+      for (const m of nodes) {
+        const q = m.slot;
+        if (q === s) continue;
+        const qs = habOf(q), ov = hs * qs + hl * (1 - qs);
+        if (ov <= 0) continue;
+        let f = 0;
+        const pool = this.tPool[q];
+        if (pool === 0) f = this.wMicro[s] * m.b * this.tVuln[q] * ov;
+        else if (pool === 1) f = this.tHost[s] >= 0 && sp.trophic !== TROPHIC.PARASITE ? (this.tHost[s] === q ? this.wProd[s] * m.b : 0) : this.wProd[s] * m.b * ov;
+        else if (pool === 2) f = this.wHerb[s] * this.link[s * MAXT + q] * m.b * this.tVuln[q] * ov;
+        add(at.get(q), at.get(s), f * n.b, 'eat');
+      }
+    }
+    // partnerships
+    for (const n of nodes) {
+      const sp = n.sp;
+      if (sp.ph?.partner === 'algae') { const alg = nodes.find((m) => m.sp.grade === 'algae' || m.sp.grade === 'diatom' || m.sp.grade === 'cyano'); if (alg) add(at.get(alg.slot), at.get(n.slot), 1, 'partner'); }
+      if (sp.grade === 'mushroom') for (const m of nodes) if (m.sp.kingdom === 'plant' && m.sp.habitat >= 1 && m.sp.habitat <= 2 && m.sp.grade !== 'moss') { add(at.get(n.slot), at.get(m.slot), 1, 'partner'); break; }
+      if (sp.host && sp.trophic === TROPHIC.GRAZER && sp.kingdom === 'animal') { const h = this.tHost[n.slot]; if (at.has(h)) add(at.get(n.slot), at.get(h), 1, 'partner'); }
+    }
+    return { nodes, links, det: this.detS[z] + this.detL[z], chem: this.zOrg[z] };
   }
 
   logSpeciation(sp) {

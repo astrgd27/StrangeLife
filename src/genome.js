@@ -10,7 +10,7 @@
 export const GENES = [
   'adhesion', 'differentiation', 'photo', 'ingest', 'absorb', 'carnivory', 'motility', 'size',
   'symmetry', 'segments', 'limbs', 'skeleton', 'vascular', 'landAdapt', 'endothermy', 'brain',
-  'wings', 'display', 'hue', 'covering', 'armour', 'succulence', 'climbing',
+  'wings', 'display', 'hue', 'covering', 'armour', 'succulence', 'climbing', 'parasitism', 'symbiosis',
 ];
 export const NG = GENES.length;
 export const GI = Object.fromEntries(GENES.map((g, i) => [g, i]));
@@ -39,6 +39,8 @@ export const GENE_INFO = {
   armour: 'Body armour: bony plates or a shell, like turtles and armadillos',
   succulence: 'Stores water in thick stems or leaves, like cacti',
   climbing: 'Climbs other plants to reach the light, like vines and orchids',
+  parasitism: 'Lives on or in one host species and feeds on it',
+  symbiosis: 'Partners with microbes: algae in corals, gut microbes in grazers, nitrogen-fixing bacteria in plant roots',
 };
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -48,7 +50,7 @@ export function makeGenes(obj = {}) {
   for (const k of GENES) g[GI[k]] = obj[k] ?? 0.1;
   if (obj.skeleton === undefined) g[GI.skeleton] = 0.5;
   if (obj.covering === undefined) g[GI.covering] = 0.32; // bare skin: the ground state
-  for (const k of ['armour', 'succulence', 'climbing']) if (obj[k] === undefined) g[GI[k]] = 0.05;
+  for (const k of ['armour', 'succulence', 'climbing', 'parasitism', 'symbiosis']) if (obj[k] === undefined) g[GI[k]] = 0.05;
   if (obj.hue === undefined) g[GI.hue] = 0.5;
   return g;
 }
@@ -71,9 +73,13 @@ export function develop(sp) {
   else if (ingest && !absorb) trophic = G('carnivory') < 0.33 ? 3 : G('carnivory') > 0.66 ? 4 : 5;
   else if (absorb || euk) trophic = 2;
   else trophic = 0;
-  const animal = euk && level >= 2 && (trophic >= 3);
+  // parasites: protists, fungi, worms and small arthropods that live on one host and feed on it
+  // (backboned animals and photosynthesisers don't)
+  const parasite = euk && !photo && !lichen && G('parasitism') > 0.6 && G('skeleton') < 0.7;
+  if (parasite) trophic = 6;
+  const animal = euk && level >= 2 && trophic >= 3 && !(parasite && absorb);
   const plant = euk && level >= 2 && trophic === 1 && !lichen;
-  const fungus = euk && level >= 2 && trophic === 2;
+  const fungus = euk && level >= 2 && (trophic === 2 || (parasite && absorb));
   const radial = G('symmetry') < 0.5;
   const motile = G('motility') > 0.35 && !plant && !fungus;
   const segments = 1 + Math.round(G('segments') * 9);
@@ -83,7 +89,7 @@ export function develop(sp) {
   if (animal) skeleton = G('skeleton') < 0.3 ? 'exo' : G('skeleton') < 0.7 || level < 3 || radial ? 'none' : 'endo';
   const limbs = animal && level === 3 && !radial ? Math.round(G('limbs') * 4) : 0;
   const sizeCap = [0.1, 0.25, 0.6, 1][level] * (animal && level === 3 && skeleton !== 'endo' ? 0.6 : 1);
-  const size = G('size') * sizeCap;
+  const size = G('size') * sizeCap * (parasite ? 0.4 : 1);
   const endo = animal && level === 3 && G('skeleton') >= 0.7 && !radial && G('endothermy') > 0.55;
   const brain = animal && level === 3 ? G('brain') : 0;
   const flying = animal && level === 3 && G('wings') > 0.6 && size < 0.6 && (limbs >= 1 || skeleton === 'exo');
@@ -95,9 +101,15 @@ export function develop(sp) {
   const covering = skeleton !== 'endo' ? 'none' : c < 0.2 ? 'fur' : c < 0.45 ? 'skin' : c < 0.75 ? 'scales' : 'feathers';
   const armour = animal && level === 3 ? G('armour') : 0;
   const shelled = euk && level <= 1 && G('skeleton') < 0.3; // diatom glass, foram chalk
+  // partners: algae living in coral tissues, gut microbes that digest plants, root bacteria that fix nitrogen
+  const sy = G('symbiosis') > 0.6;
+  const partner = !sy ? null
+    : animal && !motile && trophic !== 6 ? 'algae'
+    : animal && level === 3 && (trophic === 3 || trophic === 5) ? 'gut'
+    : plant && G('vascular') >= 0.35 ? 'roots' : null;
   return {
     level, euk, photo, trophic, animal, plant, fungus, lichen, radial, motile, segments, limbs, skeleton,
-    size, endo, brain, flying, vascular, sapient, covering, armour, shelled,
+    size, endo, brain, flying, vascular, sapient, covering, armour, shelled, parasite, partner,
     succulence: plant ? G('succulence') : 0, climbing: plant ? G('climbing') : 0,
     landAdapt: G('landAdapt'), display: G('display'), differentiation: G('differentiation'), motility: G('motility'),
     tier: !euk ? 0 : level <= 1 ? 1 : level === 2 ? 2 : sapient ? 6 : 3 + (skeleton === 'endo' ? 1 : 0) + (endo || vascular > 0.65 ? 1 : 0),
@@ -206,6 +218,8 @@ export function describe(ph) {
     if (!ph.motile) parts.push('sessile');
   }
   if (ph.lichen) parts.push('a fungus farming algae');
+  if (ph.parasite) parts.push('parasite');
+  if (ph.partner) parts.push(ph.partner === 'algae' ? 'algae partners' : ph.partner === 'gut' ? 'gut microbes' : 'nitrogen-fixing roots');
   if (ph.shelled) parts.push(ph.photo ? 'glass shell' : 'chalky shell');
   if (ph.plant) {
     if (ph.succulence > 0.6) parts.push('water-storing');
@@ -272,6 +286,13 @@ export function ecology(sp, ph) {
     // filter-feeding only works in water: a sessile animal ashore starves
     if (!ph.motile && (h === 1 || h === 2)) p.imax *= h === 2 ? 0.2 : 0.6;
   }
+  if (ph.parasite) {
+    // living off a host: steady food, but the host's immune system keeps numbers down
+    Object.assign(p, { imax: 0.2, half: 0.003, e: 0.45, m: 0.02, self: 0.5, disp: 0.06, tol: 12 });
+  }
+  if (ph.partner === 'gut') { p.e *= 1.2; p.m *= 1.04; }
+  if (ph.partner === 'roots') { p.r *= 0.95; p.roots = 1; }
+  if (ph.partner === 'algae') p.coral = 1;
   p.imax *= sz; if (!ph.photo) p.m *= sz;
   if (sp.trophic === 4) p.half *= 0.12; else if (sp.trophic === 5) p.half *= 0.35;
   // defences: size, armour, flight and speed make an animal hard to catch
@@ -314,14 +335,14 @@ export function evolvable(sp, ph) {
   const key = (k, th, w) => (G(k) < th ? w : w * 0.12);
   if (!ph.euk) return { photo: key('photo', 0.5, 3), absorb: 2, adhesion: 1, motility: 1, size: 1 };
   if (ph.lichen) return { size: 1, landAdapt: 1 };
-  if (ph.level <= 1) return sp.chloro ? { adhesion: 3, photo: 0.5, size: 1, motility: 1, skeleton: 0.4 } : { adhesion: 3, absorb: key('absorb', 0.45, 2), ingest: 1, carnivory: 1, motility: 1, size: 1, skeleton: 0.4 };
+  if (ph.level <= 1) return sp.chloro ? { adhesion: 3, photo: 0.5, size: 1, motility: 1, skeleton: 0.4 } : { adhesion: 3, absorb: key('absorb', 0.45, 2), ingest: 1, carnivory: 1, motility: 1, size: 1, skeleton: 0.4, parasitism: key('parasitism', 0.6, 0.8) };
   if (ph.plant) {
     const seed = ph.vascular >= 0.5 ? 1.2 : 0;
-    return { differentiation: key('differentiation', 0.55, 2), vascular: key('vascular', 0.65, 3), landAdapt: 2, display: 2, size: 2, succulence: seed, climbing: seed };
+    return { differentiation: key('differentiation', 0.55, 2), vascular: key('vascular', 0.65, 3), landAdapt: 2, display: 2, size: 2, succulence: seed, climbing: seed, symbiosis: ph.vascular >= 0.35 ? 0.8 : 0 };
   }
-  if (ph.fungus) return { differentiation: 1, landAdapt: 2, size: 1 };
+  if (ph.fungus) return { differentiation: 1, landAdapt: 2, size: 1, parasitism: key('parasitism', 0.6, 0.8) };
   if (!ph.animal) return { differentiation: 2, ingest: 1, absorb: 1 };
-  if (ph.level === 2) return { differentiation: 3, symmetry: 3, motility: 1.5, carnivory: 1, size: 0.5 };
+  if (ph.level === 2) return { differentiation: 3, symmetry: 3, motility: 1.5, carnivory: 1, size: 0.5, symbiosis: 1.2, parasitism: key('parasitism', 0.6, 0.3) };
   return {
     // shells can be lost and bones gained from a soft body, but a backbone is never lost
     skeleton: ph.skeleton === 'endo' ? 0 : ph.skeleton === 'exo' ? 1.2 : 3,
@@ -329,6 +350,9 @@ export function evolvable(sp, ph) {
     wings: ph.limbs >= 1 || ph.skeleton === 'exo' ? 1.5 : 0, size: 2, carnivory: 1, motility: ph.skeleton === 'endo' ? 0.3 : ph.motile ? 1 : 2.5, display: 1,
     // backboned animals can change their covering (once warm-blooded, much less) and grow armour
     covering: ph.skeleton !== 'endo' ? 0 : ph.endo ? 0.3 : 1.5, armour: ph.skeleton === 'endo' ? 0.8 : 0,
+    // soft worms and small arthropods can become parasites; grazers can take on gut microbes
+    parasitism: ph.skeleton === 'endo' ? 0 : key('parasitism', 0.6, ph.skeleton === 'none' ? 1 : ph.size < 0.2 ? 0.5 : 0),
+    symbiosis: (sp.trophic === 3 || sp.trophic === 5) ? 0.6 : ph.radial || !ph.motile ? 1.2 : 0,
   };
 }
 
@@ -369,7 +393,7 @@ export const ARCHETYPES = {
   flower: A({ adhesion: 0.85, differentiation: 0.75, photo: 0.85, size: 0.5, vascular: 0.75, landAdapt: 0.8, display: 0.8 }, 'eukaryote', true, true),
   fungi: A({ adhesion: 0.7, differentiation: 0.3, absorb: 0.8, size: 0.3 }),
   mushroom: A({ adhesion: 0.75, differentiation: 0.4, absorb: 0.8, size: 0.4, landAdapt: 0.6 }),
-  sponge: A({ adhesion: 0.7, differentiation: 0.3, ingest: 0.7, carnivory: 0.2, motility: 0.1, size: 0.5, symmetry: 0.2 }),
+  sponge: A({ adhesion: 0.7, differentiation: 0.3, ingest: 0.7, carnivory: 0.2, motility: 0.1, size: 0.5, symmetry: 0.2, symbiosis: 0.7 }),
   jelly: A({ adhesion: 0.7, differentiation: 0.4, ingest: 0.7, carnivory: 0.8, motility: 0.5, size: 0.4, symmetry: 0.2, segments: 0.5 }),
   worm: A({ adhesion: 0.75, differentiation: 0.6, ingest: 0.7, carnivory: 0.2, motility: 0.5, size: 0.3, symmetry: 0.8, segments: 0.8 }),
   mollusc: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.7, carnivory: 0.2, motility: 0.4, size: 0.4, symmetry: 0.8, segments: 0.1, skeleton: 0.12 }),
@@ -392,7 +416,7 @@ export const ARCHETYPES = {
   pterosaur: vert({ carnivory: 0.75, motility: 0.8, size: 0.3, covering: 0.35, endothermy: 0.6, wings: 0.85, brain: 0.45 }),
   bat: vert({ carnivory: 0.7, motility: 0.8, size: 0.15, covering: 0.08, endothermy: 0.8, wings: 0.85, brain: 0.5 }),
   rodent: vert({ carnivory: 0.3, motility: 0.7, size: 0.15, covering: 0.08, endothermy: 0.8, brain: 0.5 }),
-  ungulate: vert({ carnivory: 0.1, motility: 0.8, size: 0.6, covering: 0.08, endothermy: 0.8, brain: 0.5 }),
+  ungulate: vert({ carnivory: 0.1, motility: 0.8, size: 0.6, covering: 0.08, endothermy: 0.8, brain: 0.5, symbiosis: 0.75 }),
   carnivoran: vert({ carnivory: 0.85, motility: 0.8, size: 0.45, covering: 0.08, endothermy: 0.8, brain: 0.6 }),
   primate: vert({ carnivory: 0.45, motility: 0.7, size: 0.4, covering: 0.08, endothermy: 0.8, brain: 0.78 }),
   insect: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.2, motility: 0.6, size: 0.25, symmetry: 0.85, segments: 0.3, limbs: 0.75, skeleton: 0.12, landAdapt: 0.75, wings: 0.7 }),

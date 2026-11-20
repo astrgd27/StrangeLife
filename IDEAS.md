@@ -94,7 +94,7 @@ Ordered by how much Earth-like variety each adds for the effort.
    - **Plant forms:** grasses, cacti and succulents, vines and epiphytes, water plants.
    - **Fungi and plankton:** lichens; diatoms and forams.
 2. ✅ **Fresh water.** (Built.) Rivers and lakes from rain draining over the terrain. On Earth, fresh water holds about 10% of species in about 1% of the area: lake fish radiations like cichlids, insect larvae, amphibians.
-3. **Food webs, parasites and partners.**
+3. ✅ **Food webs, parasites and partners.** (Built; parasites are capped at about 5% of species by the simulation's species limit.)
    - **Food webs:** each species eats specific others, by size and defences, giving keystone species and trophic cascades.
    - **Parasites:** perhaps half of all species, each often tied to one host.
    - **Partnerships:** coral and algae, gut microbes, cleaner fish.

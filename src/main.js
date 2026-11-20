@@ -6,6 +6,7 @@ import { Renderer } from './render.js';
 import { UI } from './ui.js';
 import { TreeView } from './tree.js';
 import { ZoneView } from './zoneview.js';
+import { FoodWebView } from './foodweb.js';
 import { GRADES, GRADE_KEYS, MAXT, previewSpecies } from './ecosystem.js';
 import { drawOrganism } from './sprites.js';
 import { SLOTS, listSaves, saveToSlot, loadFromSlot, exportWorld, importWorld, describeSave } from './storage.js';
@@ -33,8 +34,14 @@ let seed = +params.get('seed') || Math.floor(Math.random() * 99999) + 1;
 let scenario = params.get('start') || 'barren';
 let world = new World(seed, { scenario });
 const renderer = new Renderer($('view'), world);
+const web = new FoodWebView();
+function openWeb(cell) {
+  const d = world.describeCell(cell), E = world.eco, z = E.zoneOf[cell];
+  web.open(world, z, `${d.biome.replace(/ · river$/, '')}${E.zSea[z] > 0.1 && E.zLand[z] > 0.1 ? ' and coast' : ''}${E.zFw[z] > 0.01 ? ', with rivers' : ''}`);
+}
 const ui = new UI(renderer, {
   dive: (z) => openZone(z),
+  web: (cell) => openWeb(cell),
   // the zone where a species is most abundant
   watch: (sp) => {
     const E = world.eco;
@@ -279,6 +286,8 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === ']') setSpeed(speed + 1);
   else if (e.key === '[') setSpeed(speed - 1);
   else if (zone.isOpen) { if (e.key === 'Escape') zone.close(); return; }
+  else if (web.isOpen) { if (e.key === 'Escape' || e.key === 'w' || e.key === 'W') web.close(); return; }
+  else if ((e.key === 'w' || e.key === 'W') && (ui.inspectCell >= 0 || hoverCell >= 0)) openWeb(ui.inspectCell >= 0 ? ui.inspectCell : hoverCell);
   else if (e.key === 't' || e.key === 'T') tree.toggle();
   else if ((e.key === 'z' || e.key === 'Z') && (ui.inspectCell >= 0 || hoverCell >= 0)) openZone(world.eco.zoneOf[ui.inspectCell >= 0 ? ui.inspectCell : hoverCell]);
   else if (e.key === 'Escape' && tree.isOpen) tree.toggle(false);
@@ -442,4 +451,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // expose for debugging in the console
-window.strangelife = { get world() { return world; }, renderer, ui, tree, zone };
+window.strangelife = { get world() { return world; }, renderer, ui, tree, zone, web };

@@ -73,7 +73,7 @@ export class Microcosm {
       this.food[c] = this.cap[c] * (0.5 + 0.4 * this.rng());
     }
     // the animals of this zone, as individuals in proportion to their numbers
-    const animals = life.filter(({ sp }) => sp.ph?.animal && this.randomPos(sp.habitat));
+    const animals = life.filter(({ sp }) => sp.ph?.animal && sp.trophic !== 6 && this.randomPos(sp.habitat));
     const tot = animals.reduce((a, q) => a + Math.sqrt(q.b), 0) || 1;
     this.groups = [];
     this.agents = [];

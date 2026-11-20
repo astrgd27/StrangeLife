@@ -65,6 +65,15 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
 - **Real:** rivers and lakes cover about 1% of Earth's surface but hold about 10% of its species. Each lake and river system is an island, so freshwater life splits into many species (cichlids, crayfish, mayflies).
 - **Game:** `Planet.computeRivers()` routes rain downhill with a priority flood from the coasts inland, so basins fill until they spill. Enough flow makes a river; a filled basin in a wet climate makes a lake. Rivers and lakes are a fourth habitat (`habitat === 3`) with their own plant capacity (`zKf`, enriched by the catchment) and their own competition for light, sharing the land's food web. `evolve()` lets populations beside rivers found freshwater species, and competition judges freshwater species' rarity against their small habitat (`abundance()`). Life moves between fresh water, shores and land, and the up-close view draws a river through the zone.
 
+## 11. Food webs, parasites and partners
+- **Real:** species eat specific others, mostly by size. Keystone predators hold common prey in check; removing them sets off trophic cascades (wolves and elk in Yellowstone, sea otters and kelp). Perhaps half of all species are parasites, tied to their hosts. Partnerships run deep: corals and their algae, grazers and gut microbes, legumes and nitrogen-fixing bacteria.
+- **Game:**
+  - `Ecosystem.buildLinks()`: each predator's preference for each prey by body-size ratio (hunters about 1/3 their size, filter-feeders much smaller). `step()` feeds predators prey by prey, weighted by preference, vulnerability and shared habitat, and records the flows.
+  - `analyseWeb()`: every 50 ticks, a predator causing over half the losses of a common prey is a keystone species; when a keystone dies out, a prey that then booms more than 1.5× is reported as a trophic cascade.
+  - Parasites (`trophic 6`, gene `parasitism`): they feed on one host, are held to a modest share of it by the host's defences, live in the host's habitat and climate, spread only where the host lives, jump hosts now and then, and cospeciate with their hosts. New parasite lineages arise from protists, fungi, worms and small arthropods. They are kept to about 5% of species by the simulation's limit on species (Earth's share is far higher).
+  - Partnerships (gene `symbiosis`): coral algae (sugar from light in sunlit shallows; mortality and lost partners above their heat tolerance, i.e. bleaching), gut microbes (better digestion of plants), root bacteria (higher plant capacity). Reefs are now built only by corals with algae.
+  - `webOf(z)` and `foodweb.js`: the food-web view of a zone.
+
 ## Also built
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)
 - Civilization stages after intelligence (`civ.js`)

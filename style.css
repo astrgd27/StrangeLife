@@ -471,3 +471,17 @@ input[type='range'] { accent-color: var(--sun); width: 100%; }
 }
 .dive-btn { margin-top: 8px; width: 100%; }
 body.zone-open .card, body.zone-open .toasts { z-index: 12; }
+
+/* food web of a zone */
+.webview {
+  position: fixed; inset: 0; z-index: 10; display: grid; grid-template-rows: auto 1fr auto;
+  background: var(--void);
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.web-stage { position: relative; min-height: 0; }
+.web-stage canvas { position: absolute; inset: 0; display: block; }
+.tag.t6 { color: #ff8a95; }
+.tag.key { color: #ffd166; }
+.tag.mut { color: #6fdc8c; }
+.zone-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.zone-actions .dive-btn { margin-top: 0; }
