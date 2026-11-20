@@ -40,7 +40,12 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
   - The *Endemics* map view lights up zones holding species found in ≤15 zones.
   - Sexual animals (birds most, then fish and insects) can speciate by mate choice with no niche change (`speciate(..., 'sexual')`).
 
-## Planned
-- Methane and an Archean organic haze (an early greenhouse; orange skies before oxygen)
-- Civilization stages once intelligence appears
-- Save/load worlds; a designer for custom seed organisms
+## Also built
+- Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)
+- Civilization stages after intelligence (`civ.js`)
+- Saving and loading worlds (`save.js`, `storage.js`) and the organism designer (Seed life → Customise)
+
+## Ideas
+- Oceans crossable by an industrial civilization (ships), and cities as map icons
+- Player policies for a civilization (conservation, clean energy)
+- A sandbox mode with an editable atmosphere

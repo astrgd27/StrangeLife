@@ -231,7 +231,7 @@ export class TreeView {
       if (i % 2 === 1) { ctx.fillStyle = 'rgba(146,176,222,0.05)'; ctx.fillRect(xa, 0, xb - xa, h); }
       ctx.fillStyle = 'rgba(146,176,222,0.22)'; ctx.fillRect(Math.round(xa), 0, 1, h);
       actx.fillStyle = 'rgba(146,176,222,0.3)'; actx.fillRect(Math.round(xa), 0, 1, 36);
-      const name = EONS[m.eon].name.toUpperCase();
+      const name = (m.label || EONS[m.eon].name).toUpperCase();
       if (xb - xa > actx.measureText(name).width + 14) { actx.fillStyle = ink; actx.fillText(name, Math.max(xa, 0) + 6, 14); }
     });
     actx.font = `10px ${mono}`;

@@ -65,7 +65,7 @@ export const GRADES = {
   mammal: { kingdom: 'animal', name: 'Mammals', tier: 5, size: 'cm–6 m', habitats: [2, 1], trophics: [3, 4, 5], icon: '🦌', imax: 0.13, half: 0.06, e: 0.3, m: 0.013, o2: 12, disp: 0.04, tol: 12, self: 0.5 },
   bird: { kingdom: 'animal', name: 'Birds', tier: 5, size: 'cm–3 m', habitats: [2, 1], trophics: [3, 4, 5], icon: '🐦', imax: 0.13, half: 0.06, e: 0.3, m: 0.013, o2: 12, disp: 0.1, tol: 12, self: 0.5 },
   whale: { kingdom: 'animal', name: 'Marine mammals', tier: 5, size: '1–30 m', habitats: [0], trophics: [4, 3], icon: '🐋', imax: 0.12, half: 0.06, e: 0.3, m: 0.011, o2: 12, disp: 0.08, tol: 12, self: 0.5 },
-  sapient: { kingdom: 'animal', name: 'Intelligent life', tier: 6, size: '1–2 m', habitats: [2, 1], trophics: [5], icon: '🧠', imax: 0.12, half: 0.03, e: 0.35, m: 0.01, o2: 14, disp: 0.06, tol: 22, self: 0.4 },
+  sapient: { kingdom: 'animal', name: 'Intelligent life', tier: 6, size: '1–2 m', habitats: [2, 1], trophics: [5], icon: '🧠', imax: 0.12, half: 0.03, e: 0.35, m: 0.01, o2: 14, disp: 0.12, tol: 22, self: 0.5 },
 };
 export const GRADE_KEYS = Object.keys(GRADES);
 
@@ -163,7 +163,8 @@ export class Ecosystem {
     this.wChem = new Float32Array(MAXT); this.wMicro = new Float32Array(MAXT); this.wProd = new Float32Array(MAXT);
     this.wHerb = new Float32Array(MAXT); this.wDet = new Float32Array(MAXT);
     this.tKing = new Int8Array(MAXT);
-    this.tHost = new Int16Array(MAXT).fill(-1); // specialist herbivores: slot of their host plant
+    this.tHost = new Int16Array(MAXT).fill(-1);
+    this.tDraw = new Float32Array(MAXT).fill(1); // share of food taken from the wild (farming lowers it) // specialist herbivores: slot of their host plant
     this.recentMax = 0;      // recent peak species count, for spotting post-extinction recovery
     this.specLog = {};       // recent speciation ticks per grade, for spotting adaptive radiations
     this.radiationNoted = {};
@@ -342,8 +343,10 @@ export class Ecosystem {
     else if (G.tier <= 1 && G.kingdom !== 'plant') this.tPool[s] = POOL.MICRO;
     else if (animal && (sp.trophic === T.GRAZER || sp.trophic === T.OMNI || G.tier <= 3)) this.tPool[s] = POOL.HERB;
     else this.tPool[s] = POOL.NONE;
-    // intelligent life is a flexible omnivore that eats plants as well as prey
-    if (sp.grade === 'sapient') { this.wProd[s] = 0.8; this.wHerb[s] = 0.8; }
+    // intelligent life is a flexible omnivore that eats plants as well as prey, and grows much of
+    // its own food, so it takes far less from wild ecosystems for its numbers
+    this.tDraw[s] = 1;
+    if (sp.grade === 'sapient') { this.wProd[s] = 0.8; this.wHerb[s] = 0.8; this.tDraw[s] = 0.3; }
   }
 
   extinct(slot) {
@@ -483,7 +486,7 @@ export class Ecosystem {
     const suitArr = this.suit;
     const archK = KINGDOM_KEYS.indexOf('archaea');
     const archO2 = 0.03 * Math.min(1, o2 / 5); // most archaea are strict anaerobes
-    let prodTotal = 0, landProd = 0;
+    let prodTotal = 0, landProd = 0, methane = 0;
     const kRange = this.kRange || (this.kRange = new Int32Array(KINGDOM_KEYS.length));
     kRange.fill(0);
     let lifeZones = 0;
@@ -554,7 +557,7 @@ export class Ecosystem {
           const I = F > 0 ? tImax[s] * F / (F + tHalf[s]) : 0;
           nb = b + b * (tE[s] * I * suit * o2f - mort - tSelf[s] * coexist * b);
           if (F > 0) {
-            const eat = b * I / F;
+            const eat = (b * I / F) * this.tDraw[s];
             cMicroS += eat * fMicro * hs; cMicroL += eat * fMicro * hl;
             cProdS += eat * fProd * hs; cProdL += eat * fProd * hl;
             cHerbS += eat * fHerb * hs; cHerbL += eat * fHerb * hl;
@@ -589,6 +592,7 @@ export class Ecosystem {
           pres[base + w++] = s;
           total[s] += nb; range[s]++;
           if (nb > 1e-4) kmask |= 1 << tKing[s];
+          if (tKing[s] === archK) methane += nb; // archaea include the methanogens
           const h = tHab[s];
           sumT[s] += nb * (h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]));
           sumN2[s] += nb * (h === 0 ? this.zDs[z] : this.zMl[z]);
@@ -611,6 +615,7 @@ export class Ecosystem {
     // tell the planet what the biosphere is doing
     P.primaryProduction = prodTotal / Z;
     P.landProduction = landProd / Z;
+    P.methaneProduction = methane / Z;
     this.applyToPlanet();
   }
 
@@ -682,8 +687,9 @@ export class Ecosystem {
         this.tPref[s] = sp.pref;
         if (this.tick % 40 === 0) this.refreshSuit(s);
       }
-      // speciation: a population splits off and goes its own way
-      if (nA >= SPEC_CAP) continue;
+      // speciation: a population splits off and goes its own way (a globe-spanning intelligent
+      // species keeps exchanging genes and ideas, so it stays one species)
+      if (nA >= SPEC_CAP || sp.grade === 'sapient') continue;
       const rangeF = Math.max(0.2, Math.min(2.5, sp.range / 25));
       // diversity-dependent diversification: species packed into the same niche split more slowly
       const nB = bins.get(sp._bin)?.length ?? 1, nG = gradeCounts[sp.grade];
@@ -702,7 +708,7 @@ export class Ecosystem {
     // out. A grade with far too many species also loses its rarest.
     for (const list of bins.values()) {
       if (list.length < 4 || rng() > 0.02 * (list.length - 3)) continue;
-      const worst = list.filter((q) => q.died < 0 && this.tick - q.born > 100).sort((a, b) => a.total - b.total)[0];
+      const worst = list.filter((q) => q.died < 0 && q.grade !== 'sapient' && this.tick - q.born > 100).sort((a, b) => a.total - b.total)[0];
       if (worst) { worst.outcompeted = true; this.extinct(worst.slot); }
     }
     for (const g in gradeCounts) {
@@ -711,7 +717,7 @@ export class Ecosystem {
       let worst = null;
       for (const s of this.alive) {
         const sp = this.slots[s];
-        if (sp.grade === g && this.tick - sp.born > 100 && (!worst || sp.total < worst.total)) worst = sp;
+        if (sp.grade === g && g !== 'sapient' && this.tick - sp.born > 100 && (!worst || sp.total < worst.total)) worst = sp;
       }
       if (worst) { worst.outcompeted = true; this.extinct(worst.slot); }
     }
@@ -751,7 +757,7 @@ export class Ecosystem {
     if (nA >= MAXT - 5) return;
     for (const s of this.alive.slice()) {
       const sp = this.slots[s];
-      if (!sp || sp.range < 6) { if (sp) sp.isolates = null; continue; }
+      if (!sp || sp.range < 6 || sp.grade === 'sapient') { if (sp) sp.isolates = null; continue; }
       comp.fill(-1);
       const comps = [];
       for (let z = 0; z < Z; z++) {

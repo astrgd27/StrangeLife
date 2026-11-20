@@ -89,6 +89,10 @@ export const STORY = [
 ];
 
 export const EVENTS = {
+  haze: { icon: '🟠', title: 'An orange sky', earth: 'The Archean, ~3.8–2.5 billion years ago',
+    text: 'Archaea called methanogens fill the oxygen-free air with methane, a powerful greenhouse gas. It helped keep the early Earth warm under a dim young Sun. With enough methane, sunlight turns it into a hydrocarbon haze, like on Saturn\'s moon Titan, and the sky glows orange.' },
+  methanecollapse: { icon: '🥶', title: 'The methane crash', earth: 'The Huronian glaciation, ~2.4–2.1 billion years ago',
+    text: 'Oxygen destroys methane. When the Great Oxidation Event filled the air with oxygen, the methane greenhouse collapsed and Earth plunged into one of its longest ice ages, lasting some 300 million years.' },
   iceage: { icon: '🧊', title: 'Ice ages come and go', earth: 'About 50 glacial cycles in the last 2.6 million years',
     text: 'Slow wobbles in a planet\'s orbit and tilt (Milankovitch cycles) change where sunlight falls. On a cool planet, ice amplifies them into ice ages. As glaciers advance, species retreat into warm refuges and their ranges break apart; when the ice melts they spread out again, often as new species. Biologists call this a "species pump".' },
   radiation: { icon: '🎆', title: 'Adaptive radiation', earth: 'Mammals after the dinosaurs; cichlid fish in Lake Victoria (~500 species in ~15,000 years)',

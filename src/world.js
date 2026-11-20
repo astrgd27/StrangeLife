@@ -6,6 +6,7 @@ import { Ecosystem, GRADES, KINGDOM_KEYS, TROPHIC } from './ecosystem.js';
 import { mulberry32 } from './rng.js';
 import { storyByKey } from './science.js';
 import { Tectonics } from './tectonics.js';
+import { Civilization, CIV_STAGES } from './civ.js';
 
 // The four eons of Earth's history. Time runs fast while only microbes live and slows down once
 // complex life appears, so the whole story fits into a game session.
@@ -138,10 +139,20 @@ export class World {
     return sp;
   }
 
+  // how many years one tick lasts: long in the microbial eons, short once civilization arrives
+  get yearsPerTick() {
+    return this.civ && !this.civ.fallen ? this.civ.yearsPerTick : EONS[this.eon].yearsPerTick;
+  }
+
+  // a change in the pace of time (new eon or civilization stage), so years can be reconstructed
+  markTime(label) {
+    this.eonTicks.push({ tick: this.tick, eon: this.eon, rate: this.yearsPerTick, label });
+  }
+
   setEon(e) {
     if (e <= this.eon) return;
     this.eon = e;
-    this.eonTicks.push({ tick: this.tick, eon: e });
+    this.eonTicks.push({ tick: this.tick, eon: e, rate: EONS[e].yearsPerTick });
     this.emit({ type: 'eon', eon: e });
   }
 
@@ -152,7 +163,7 @@ export class World {
     for (let i = 0; i < marks.length; i++) {
       const end = i + 1 < marks.length ? marks[i + 1].tick : Infinity;
       const span = Math.max(0, Math.min(tick, end) - t);
-      y += span * EONS[marks[i].eon].yearsPerTick;
+      y += span * (marks[i].rate ?? EONS[marks[i].eon].yearsPerTick);
       t += span;
       if (tick <= end) break;
     }
@@ -169,13 +180,16 @@ export class World {
 
   step() {
     this.tick++;
-    this.years += EONS[this.eon].yearsPerTick;
+    const rate = this.yearsPerTick;
+    this.years += rate;
     const P = this.planet;
+    P.yearsPerTick = rate;
     P.step(this.tick);
     // continents drift; when the map changes, the zones' environments change with it
-    const moved = this.tect.step(EONS[this.eon].yearsPerTick);
+    const moved = this.tect.step(rate);
     if (moved || this.tick % 6 === 0) this.eco.updateEnvironment();
     this.eco.step(this.years);
+    if (this.civ && !this.civ.fallen) this.civ.step();
     if (this.eco.alive.length === 0) this.stepAbiogenesis();
     if (this.naturalEvents) this.naturalDisasters();
     if (this.tick % this.historyEvery === 0) this.sample();
@@ -224,7 +238,7 @@ export class World {
       this.emit({ type: 'comet', cell: c, natural: true });
     }
     // rare large asteroid once complex life is around
-    if (this.eon >= 3 && this.tick - (this.lastAsteroid ?? -1e9) > 4000 && rng() < 0.00004) {
+    if (this.eon >= 3 && this.tick - (this.lastAsteroid ?? -1e9) > 4000 && rng() < 0.00004 * Math.min(1, this.yearsPerTick / 5e4)) {
       this.lastAsteroid = this.tick;
       const c = Math.floor(rng() * P.n);
       this.asteroid(c);
@@ -283,6 +297,22 @@ export class World {
         this.supercontinent = false;
         this.emit({ type: 'milestone', key: 'breakup-' + this.tick, event: 'breakup', text: 'The supercontinent is rifting apart. New oceans open between the pieces.' });
       }
+    }
+    // civilization: the first (or next) intelligent species founds one
+    if (!this.civ || this.civ.fallen) {
+      const sap = E.alive.map((s) => E.slots[s]).find((sp) => sp.grade === 'sapient' && sp.range >= 3);
+      if (sap && (!this.civ || this.civ.speciesId !== sap.id)) {
+        this.civ = new Civilization(this, sap);
+        this.markTime(CIV_STAGES[0].name);
+        this.emit({ type: 'civstage', stage: 0 });
+      }
+    }
+    // methane: haze in the Archean, and its collapse when oxygen arrives
+    if (P.haze > 0.4 && !this.hazeNoted) { this.hazeNoted = true; this.emit({ type: 'milestone', key: 'haze', event: 'haze', text: 'Methane from archaea turns the sky orange and warms the planet.' }); }
+    if (P.ch4 > 3) this.methaneHigh = true;
+    if (this.methaneHigh && P.o2 > 1 && P.ch4 < 0.5 && !this.methaneCrashed) {
+      this.methaneCrashed = true;
+      this.emit({ type: 'milestone', key: 'ch4crash', event: 'methanecollapse', text: 'Oxygen destroys the methane greenhouse: the planet cools sharply.', bad: true });
     }
     // ice-age cycles: announce each glacial period on a cool planet
     if (P.cycles && P.cycleAmp > 2.5 && !this.glacial && P.orbital < -0.45 * P.cycleAmp) {

@@ -401,8 +401,9 @@ export class Renderer {
     this.ocean.visible = this.overlay === 'biome';
     // the sky and sea change with the atmosphere: hazy orange and green under CO₂ and methane,
     // blue once oxygen builds up
-    const ox = Math.min(1, P.o2 / 8);
-    this.atmosphere.material.uniforms.glow.value.setRGB(0.95 - 0.66 * ox, 0.55 + 0.0 * ox, 0.3 + 0.7 * ox);
+    const ox = Math.min(1, P.o2 / 8), hz = P.haze || 0;
+    this.atmosphere.material.uniforms.glow.value.setRGB(
+      (0.95 - 0.66 * ox) * (1 - hz) + 1.0 * hz, (0.55) * (1 - hz) + 0.5 * hz, (0.3 + 0.7 * ox) * (1 - hz) + 0.15 * hz);
     this.ocean.material.color.setRGB(0.22 - 0.11 * ox, 0.36 - 0.05 * ox, 0.25 + 0.29 * ox);
   }
 

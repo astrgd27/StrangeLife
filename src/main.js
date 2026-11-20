@@ -6,6 +6,7 @@ import { Renderer } from './render.js';
 import { UI } from './ui.js';
 import { TreeView } from './tree.js';
 import { GRADES, GRADE_KEYS } from './ecosystem.js';
+import { SLOTS, listSaves, saveToSlot, loadFromSlot, exportWorld, importWorld, describeSave } from './storage.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -59,6 +60,35 @@ for (const g of GRADE_KEYS) {
   $('seed-preset').appendChild(o);
 }
 $('seed-preset').value = 'bacteria';
+
+// organism designer: options for the chosen group
+const TROPHIC_LABELS = ['Chemical energy (chemotroph)', 'Sunlight (photosynthesis)', 'Dead matter (decomposer)', 'Plants & microbes (grazer)', 'Other animals (predator)', 'Both (omnivore)'];
+const HABITAT_LABELS = ['Sea', 'Coast (land and water)', 'Land'];
+function refreshDesigner() {
+  const G = GRADES[$('seed-preset').value];
+  $('d-trophic').innerHTML = G.trophics.map((t) => `<option value="${t}">${TROPHIC_LABELS[t]}</option>`).join('');
+  $('d-habitat').innerHTML = G.habitats.map((h) => `<option value="${h}">${HABITAT_LABELS[h]}</option>`).join('');
+  refreshDesignerLabels();
+}
+function refreshDesignerLabels() {
+  const v = +$('d-size').value;
+  $('d-size-out').textContent = v < 0.25 ? 'small' : v < 0.6 ? 'medium' : 'large';
+  $('d-temp-out').textContent = `${$('d-temp').value}°C`;
+  const adapt = $('d-adapt').checked;
+  $('d-temp-wrap').hidden = adapt; $('d-n2-wrap').hidden = adapt;
+  $('d-n2-label').textContent = +$('d-habitat').value === 0 ? 'Water depth (shallow → deep)' : 'Rainfall (desert → rainforest)';
+}
+$('seed-preset').addEventListener('change', refreshDesigner);
+['d-size', 'd-temp', 'd-adapt', 'd-habitat'].forEach((id) => $(id).addEventListener('input', refreshDesignerLabels));
+refreshDesigner();
+function designerOptions() {
+  if (!$('designer').open) return { seeded: true };
+  const o = { seeded: true, trophic: +$('d-trophic').value, habitat: +$('d-habitat').value, size: +$('d-size').value };
+  if (!$('d-adapt').checked) { o.pref = +$('d-temp').value; o.n2 = +$('d-n2').value; }
+  const name = $('d-name').value.trim();
+  if (name) o.name = name;
+  return o;
+}
 
 function setTool(id) {
   tool = id;
@@ -146,7 +176,7 @@ function click(x, y, pointerType) {
     ui.inspect(cell);
   } else if (tool === 'seed') {
     const g = $('seed-preset').value;
-    const sp = E.seed(g, E.zoneOf[cell], { seeded: true });
+    const sp = E.seed(g, E.zoneOf[cell], designerOptions());
     if (!sp) { ui.toast('Too many species alive to add another right now.', 'bad'); return; }
     if (!E.habitatOk(sp.habitat, E.zoneOf[cell])) ui.toast(`${GRADES[g].name} need ${['open sea', 'a coastline', 'dry land'][sp.habitat]} to live.`, 'bad');
     else ui.toast(`You seeded ${sp.icon} ${sp.name} (${GRADES[g].name.toLowerCase()}).`, 'star');
@@ -268,6 +298,61 @@ function newWorld(s, sc) {
 }
 $('sea-level').value = world.planet.seaLevel;
 refreshSea();
+
+// ---------- saved worlds ----------
+
+const saveStatus = (msg) => { $('save-status').textContent = msg; };
+async function refreshSaves() {
+  let saves = {};
+  try { saves = await listSaves(); } catch (err) { saveStatus(err.message); }
+  $('save-list').innerHTML = SLOTS.map((slot) => {
+    const meta = saves[slot];
+    return `<li><div class="save-name">${slot === 'auto' ? 'Autosave' : `Slot ${slot}`}<span class="muted small">${describeSave(meta)}</span></div>
+      <div class="save-btns">${slot !== 'auto' ? `<button class="ghost" data-save="${slot}">Save</button>` : ''}<button class="ghost" data-load="${slot}" ${meta ? '' : 'disabled'}>Load</button></div></li>`;
+  }).join('');
+}
+function adoptWorld(w, msg) {
+  world = w;
+  world.naturalEvents = $('natural-events').checked;
+  renderer.setWorld(world);
+  ui.setWorld(world);
+  tree.setWorld(world);
+  $('seed-input').value = world.seed; $('scenario').value = world.scenario;
+  $('mutation').value = world.eco.mutationRate; $('transitions').value = world.eco.transitionRate;
+  $('drift').value = world.tect.speed; $('greenhouse').value = world.planet.globalTemp; $('sea-level').value = world.planet.seaLevel;
+  $('ice-cycles').checked = world.planet.cycles !== false;
+  refreshGreenhouse(); refreshSea(); refreshMut(); refreshTrans(); refreshDrift();
+  lastSea = world.planet.seaLevel; lastTerrain = world.planet.terrainVersion;
+  ui.chronicle(world.tick, msg);
+  ui.toast(msg, 'star');
+}
+$('save-list').addEventListener('click', async (e) => {
+  const s = e.target.closest('[data-save]'), l = e.target.closest('[data-load]');
+  try {
+    if (s) { saveStatus('Saving…'); await saveToSlot(world, s.dataset.save); saveStatus(`Saved to slot ${s.dataset.save}.`); }
+    if (l) { saveStatus('Loading…'); const w = await loadFromSlot(l.dataset.load); adoptWorld(w, `Loaded a saved world (${l.dataset.load === 'auto' ? 'autosave' : 'slot ' + l.dataset.load}).`); saveStatus('Loaded.'); }
+  } catch (err) { saveStatus(`Couldn't ${s ? 'save' : 'load'}: ${err.message}`); }
+  refreshSaves();
+});
+$('btn-export').addEventListener('click', async () => {
+  try { await exportWorld(world); saveStatus('World file downloaded. (Inside some embedded viewers downloads are blocked; use a save slot instead.)'); }
+  catch (err) { saveStatus(`Couldn't export: ${err.message}`); }
+});
+$('btn-import').addEventListener('click', () => $('import-file').click());
+$('import-file').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try { saveStatus('Opening…'); adoptWorld(await importWorld(f), `Opened a world from ${f.name}.`); saveStatus('Opened.'); }
+  catch (err) { saveStatus(`Couldn't open that file: ${err.message}`); }
+  e.target.value = '';
+});
+let lastAutosave = performance.now();
+setInterval(async () => {
+  if (!$('autosave').checked || speed === 0 || performance.now() - lastAutosave < 120000) return;
+  lastAutosave = performance.now();
+  try { await saveToSlot(world, 'auto'); refreshSaves(); } catch { /* storage unavailable */ }
+}, 10000);
+refreshSaves();
 
 $('btn-help').addEventListener('click', () => ($('intro').hidden = false));
 $('btn-start').addEventListener('click', () => ($('intro').hidden = true));

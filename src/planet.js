@@ -137,6 +137,7 @@ export class Planet {
     this.meanT = 15; this.iceFrac = 0; this.landFrac = 0.3; this.oceanFrac = 0.7; this.landPlantCover = 0;
     this.primaryProduction = 0;
     this.cycles = true; this.orbital = 0; this.cycleAmp = 0;
+    this.ch4 = 0; this.haze = 0; this.methaneProduction = 0;
     this.landProduction = 0;
     this.generate(seed, scenario);
   }
@@ -258,7 +259,9 @@ export class Planet {
   // Global temperature shift from the atmosphere and the Sun.
   // ~5 °C per doubling of CO₂ (a game-sized climate sensitivity), a dimmer young Sun,
   // and ice reflecting sunlight back to space (ice-albedo feedback: can tip into a "snowball").
-  get greenhouse() { return 5 * Math.log2(Math.max(0.05, this.co2)); }
+  // CO₂ plus methane (a stronger greenhouse gas, made by archaea before there was oxygen to destroy
+  // it); a thick methane haze shades the surface a little, like Titan's
+  get greenhouse() { return 5 * Math.log2(Math.max(0.05, this.co2)) + 4 * Math.log2(1 + this.ch4) - 4 * this.haze; }
   get solar() { return (this.sun - 1) * 75; }
   get albedo() { return -16 * Math.max(0, this.iceFrac - 0.12); }
   get globalShift() { return this.greenhouse + this.solar + this.albedo + this.orbital + this.globalTemp - this.winter; }
@@ -269,7 +272,7 @@ export class Planet {
   // game session sees ice ages come and go.
   updateOrbital() {
     if (!this.cycles) { this.orbital = 0; this.cycleAmp = 0; return; }
-    const a = this.age, tau = Math.PI * 2;
+    const a = this.orbitalClock ?? this.age, tau = Math.PI * 2;
     const amp = 1 + 4 * Math.min(1, Math.max(0, (16 - this.meanT) / 14));
     const wave = (0.5 * Math.sin((tau * a) / 170) + 0.35 * Math.sin((tau * a) / 260 + 1) + 0.65 * Math.sin((tau * a) / 700 + 2)) / 1.5;
     this.cycleAmp = amp;
@@ -373,6 +376,10 @@ export class Planet {
     }
     this.o2 = Math.max(0, this.o2);
 
+    // methane: made by methanogens, destroyed by sunlight slowly and by oxygen fast
+    this.ch4 = Math.max(0, this.ch4 + this.methaneProduction * 2.5 - this.ch4 * (0.004 + 0.08 * Math.min(1, this.o2 / 1.5)));
+    this.haze = Math.max(0, Math.min(1, (this.ch4 / Math.max(0.5, this.co2) - 0.5) * 1.5));
+
     // water vapour from volcanoes slowly fills the ocean basins
     if (this.seaLevel < 0) this.seaLevel = Math.min(0, this.seaLevel + 0.00003 * this.volcanism);
     if (Math.abs(this.seaLevel - (this.lastSea ?? this.seaLevel)) > 0.004) {
@@ -385,6 +392,8 @@ export class Planet {
   step(tick) {
     if (this.winter > 0) this.winter = Math.max(0, this.winter * 0.985 - 0.005);
     this.stepAtmosphere(tick);
+    // orbital cycles run on real time: one step per tick, but nearly frozen at a human pace
+    this.orbitalClock = (this.orbitalClock ?? this.age) + Math.min(1, (this.yearsPerTick ?? 5e4) / 5e4);
     if (tick % 6 === 0) this.updateOrbital();
     if (this.climateDirty || tick % 6 === 0) this.updateClimate();
     if (tick % 2 === 0) this.stepChemistry(2);

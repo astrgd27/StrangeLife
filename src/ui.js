@@ -3,6 +3,7 @@
 import { GRADES, KINGDOMS, KINGDOM_KEYS, TROPHIC_NAMES, HABITAT_NAMES, MAXT } from './ecosystem.js';
 import { EONS, formatYears } from './world.js';
 import { STORY, EVENTS, storyByKey } from './science.js';
+import { CIV_STAGES } from './civ.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -103,6 +104,17 @@ export class UI {
       const why = e.species.outcompeted ? 'was outcompeted and went extinct' : 'went extinct';
       this.chronicle(e.tick, `${e.species.icon} ${e.species.name} (${GRADES[e.species.grade].name.toLowerCase()}) ${why}.`, true);
       if (e.species.peakRange >= 500) this.toast(`${e.species.icon} ${e.species.name} ${why}.`, 'bad');
+    } else if (e.type === 'civstage') {
+      const S = CIV_STAGES[e.stage];
+      this.toast(`${S.icon} ${e.stage === 0 ? 'Civilization begins: the Stone Age' : `${S.name}`}`, 'star');
+      this.chronicle(e.tick, `${S.icon} ${e.stage === 0 ? 'An intelligent species starts a civilization: the Stone Age.' : `Civilization enters the ${S.name.toLowerCase()}${e.stage === CIV_STAGES.length - 1 ? '. Its ships leave for the stars.' : '.'}`}`);
+      this.openCard({ icon: S.icon, title: S.name, earth: S.earth, text: S.text });
+    } else if (e.type === 'civleft') {
+      this.toast('🚀 The last of the intelligent species has left the planet.', 'star');
+      this.chronicle(e.tick, 'The intelligent species has left the planet for the stars. The biosphere carries on without it.');
+    } else if (e.type === 'civfall') {
+      this.toast('💀 The civilization has fallen: its species is extinct.', 'bad');
+      this.chronicle(e.tick, `The civilization falls during the ${CIV_STAGES[e.stage].name.toLowerCase()}: its species has gone extinct. Life goes on.`, true);
     } else if (e.type === 'radiation') {
       const G = GRADES[e.grade];
       this.toast(`🎆 Adaptive radiation: ${G.name.toLowerCase()} are diversifying fast.`, 'star');
@@ -193,7 +205,8 @@ export class UI {
     const due = (k, ms) => { if (now - (t[k] || 0) > ms) { t[k] = now; return true; } return false; };
     if (due('stats', 250)) {
       $('clock-value').textContent = formatYears(W.years);
-      $('eon-chip').textContent = EONS[W.eon].name;
+      const civ = W.civ && !W.civ.fallen ? W.civ : null;
+      $('eon-chip').textContent = civ ? `${civ.info.icon} ${civ.info.name}` : EONS[W.eon].name;
       $('stat-species').textContent = E.alive.length;
       $('stat-life').textContent = `${Math.round(((E.lifeZones || 0) / E.Z) * 100)}%`;
       $('stat-temp').textContent = `${P.meanT.toFixed(0)}°C`;
@@ -334,6 +347,7 @@ export class UI {
     html += gauge('Mean temperature', `${P.meanT.toFixed(1)}°C`, (P.meanT + 20) / 100, P.meanT > 45 ? 'Too hot for life: seas are scalding.' : P.meanT < -5 ? 'Frozen: a snowball world.' : '', 'g-temp');
     html += gauge('Carbon dioxide', `${P.co2 >= 100 ? Math.round(P.co2).toLocaleString() : P.co2.toFixed(1)}× today`, Math.log10(Math.max(0.1, P.co2) * 10) / 6, P.co2 > 50 ? 'A thick greenhouse. Weathering and life slowly draw it down.' : '', 'g-co2');
     html += gauge('Oxygen', `${P.o2.toFixed(1)}%`, P.o2 / 25, P.iron > 0 && E.gradeAlive('cyano') ? `Oceans rusting: ${Math.round((1 - P.iron) * 100)}% of dissolved iron used up` : P.o2 > 21 ? 'Wildfires keep oxygen from rising much higher.' : '', 'g-o2');
+    if (P.ch4 > 0.05 || P.o2 < 1) html += gauge('Methane', `${P.ch4.toFixed(1)}`, Math.min(1, P.ch4 / 12), P.haze > 0.3 ? 'Thick enough to form an orange haze.' : P.ch4 > 1 ? 'Made by methanogens; warms the planet.' : '', 'g-ch4');
     html += gauge('Ozone shield', `${Math.round(P.ozone * 100)}%`, P.ozone, P.ozone < 0.5 ? 'Without ozone, ultraviolet light sterilises dry land.' : '', 'g-o3');
     html += gauge('Ocean cover', `${Math.round(P.oceanFrac * 100)}%`, P.oceanFrac, '', 'g-sea');
     html += gauge('Ice cover', `${Math.round(P.iceFrac * 100)}%`, P.iceFrac, '', 'g-ice');
@@ -348,6 +362,15 @@ export class UI {
     if (E.alive.length === 0) {
       const potential = W.lifePotential;
       html += `<div class="abio">${gauge('Path to the first cell', `${Math.round(W.abiogenesis * 100)}%`, W.abiogenesis, potential > 1.5 ? 'Chemistry is brewing in a warm, organic-rich sea.' : W.liquidFrac < 0.08 ? 'Needs liquid oceans: cool the planet or wait for weathering.' : 'Needs a warm (5–50 °C) shallow sea rich in organics. Try lightning or comets near vents and coasts. The Organics map view shows where.', 'g-life')}</div>`;
+    }
+    const civ = W.civ;
+    if (civ) {
+      const sp = civ.species;
+      html += `<div class="civ"><div class="civ-head"><span class="civ-icon">${civ.fallen ? '💀' : civ.info.icon}</span><div><b>${civ.fallen ? 'Fallen civilization' : civ.info.name}</b><div class="muted small">${sp ? `<i>${esc(sp.name)}</i>` : ''}${civ.fallen ? '' : ` · ${Math.round(civ.stageYears).toLocaleString()} years in this age · living in ${civ.range ?? sp?.range ?? 0} zones`}</div></div></div>
+        <ol class="civ-stages">${CIV_STAGES.map((S, i) => `<li class="${i < civ.stage ? 'done' : i === civ.stage ? 'now' : ''}" title="${S.name}">${S.icon}</li>`).join('')}</ol>
+        ${!civ.fallen && civ.stage < CIV_STAGES.length - 1 ? gauge('Progress to the next age', `${Math.round(civ.progress * 100)}%`, civ.progress, '', 'g-life') : ''}
+        ${!civ.fallen && civ.info.emit ? '<div class="g-note">Burning fossil fuel: CO₂ is rising and the climate is warming.</div>' : ''}
+        ${!civ.fallen && civ.info.hunt > 0.003 ? '<div class="g-note">Hunting and land clearing are pushing large animals and forests back.</div>' : ''}</div>`;
     }
     $('atmo-stats').innerHTML = html;
 

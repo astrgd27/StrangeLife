@@ -55,9 +55,19 @@
     <label class="field" id="opt-brush"><span>Brush size</span>
       <input id="brush-size" type="range" min="0.04" max="0.4" step="0.01" value="0.12">
     </label>
-    <label class="field" id="opt-preset"><span>Organism</span>
-      <select id="seed-preset"></select>
-    </label>
+    <div id="opt-preset">
+      <label class="field"><span>Organism</span><select id="seed-preset"></select></label>
+      <details class="designer" id="designer">
+        <summary>Customise</summary>
+        <label class="field"><span>Diet</span><select id="d-trophic"></select></label>
+        <label class="field"><span>Habitat</span><select id="d-habitat"></select></label>
+        <label class="field"><span>Body size <output id="d-size-out" class="mono">medium</output></span><input id="d-size" type="range" min="0" max="1" step="0.05" value="0.4"></label>
+        <label class="check"><input type="checkbox" id="d-adapt" checked> Adapt to where I click</label>
+        <label class="field" id="d-temp-wrap" hidden><span>Preferred temperature <output id="d-temp-out" class="mono">20°C</output></span><input id="d-temp" type="range" min="-20" max="40" step="1" value="20"></label>
+        <label class="field" id="d-n2-wrap" hidden><span id="d-n2-label">Rainfall</span><input id="d-n2" type="range" min="0" max="1" step="0.05" value="0.5"></label>
+        <label class="field"><span>Name (optional)</span><input id="d-name" type="text" maxlength="40" placeholder="Genus species"></label>
+      </details>
+    </div>
   </div>
 </nav>
 
@@ -132,6 +142,15 @@
     <label class="check"><input type="checkbox" id="natural-events" checked> Comets &amp; asteroids</label>
     <label class="check"><input type="checkbox" id="ice-cycles" checked> Ice-age cycles</label>
     <label class="check"><input type="checkbox" id="auto-rotate"> Spin the globe</label>
+    <h3>Saved worlds</h3>
+    <ol class="saves" id="save-list"></ol>
+    <label class="check"><input type="checkbox" id="autosave" checked> Autosave every 2 minutes</label>
+    <div class="row">
+      <button class="ghost" id="btn-export" title="Download this world as a file">Export file</button>
+      <button class="ghost" id="btn-import" title="Open a world file">Import file</button>
+      <input type="file" id="import-file" accept=".strangelife,.json,application/octet-stream" hidden>
+    </div>
+    <p class="muted small" id="save-status"></p>
     <h3>New world</h3>
     <label class="field"><span>Start from</span>
       <select id="scenario">

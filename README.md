@@ -34,6 +34,10 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 
 The **🌳 Tree of life** button (or `T`) opens a full-screen view. *Major groups* is a spindle diagram: each group's thickness over time is how many species it had. *Species* is the full phylogeny, which you can filter by kingdom or group and zoom in time. Living species are named at the tips.
 
+**Seed life** (`-`) can release any kind of organism. *Customise* lets you pick its diet, habitat, body size, climate and rainfall (or water depth), and name it.
+
+**Saved worlds** (World tab) keeps three save slots and an autosave in your browser, and can export or import a world as a file.
+
 The panel on the right has four tabs:
 
 - **Life** lists living species grouped by kingdom. Click one to light up its range on the globe.
@@ -49,6 +53,7 @@ Everything below emerges from the simulation. Nothing is scripted to happen at a
 - **Geodesic grid.** The terrain uses 40,962 cells. Life lives in 2,562 zones (each about 450 km across), roughly SimEarth's scale.
 - **Faint young Sun.** It starts at 76% of today's brightness and slowly brightens.
 - **Carbon–silicate cycle.** Volcanoes add CO₂. Rock weathering removes it, faster when it's warm, wet and plant-covered. This thermostat cools the scalding early planet over a few hundred million years, and land plants cool it further.
+- **Methane.** Archaea (methanogens) fill the oxygen-free sky with methane, warming the planet under the dim young Sun, and with enough of it an orange haze forms. When oxygen arrives, methane collapses and the planet can plunge into a long ice age, as Earth did in the Huronian glaciation.
 - **Ice–albedo feedback.** Ice reflects sunlight, so the planet can tip into a **snowball** state. It escapes when volcanic CO₂ builds up.
 - **Water delivery.** Volcanic outgassing and icy comets fill the ocean basins over time.
 - **Plate tectonics.** About ten plates drift at 1–8 cm/yr:
@@ -107,6 +112,12 @@ Each zone holds the biomass of every species living there:
 - **Ozone.** It forms once there's oxygen and shields land from ultraviolet light. Before that, dry land is sterile.
 - **Mass extinctions.** Asteroids and climate swings cause them, followed by adaptive radiations.
 
+### Civilization
+When intelligence evolves, its species founds a civilization that advances through six stages: Stone Age, Farming, Metal Ages, Industrial, Information Age and Spacefaring.
+- **Time:** it slows to a human pace during the human stages.
+- **Footprint:** hunting and land clearing push back large animals and forests where people live. Industry burns fossil fuel, raising CO₂ and warming the climate, until cleaner energy takes over.
+- **Endings:** if the species dies out, its civilization falls. If it reaches space, deep time resumes and the planet keeps evolving.
+
 ### Deep time
 Each tick lasts longer while life is microbial (Hadean, Archean, Proterozoic) and shorter in the Phanerozoic, so the whole story fits in a session. The Planet tab compares your planet's milestones with when they happened on Earth.
 
@@ -125,6 +136,9 @@ src/names.js        procedural Latin names, styled by group
 src/render.js       Three.js globe, ocean, atmosphere, clouds, life icons, picking, effects
 src/ui.js           panels, charts, planet story, inspector, discovery cards
 src/tree.js         full-screen tree of life (group spindles + species phylogeny)
+src/civ.js          civilization stages and their effects on the planet
+src/save.js         serialize / restore whole worlds (compressed)
+src/storage.js      save slots in IndexedDB, autosave, file export / import
 src/main.js         bootstrap, tools, input, game loop
 tools/headless.mjs  run the simulation in Node without graphics
 vendor/             three.js r160 + OrbitControls (MIT)
