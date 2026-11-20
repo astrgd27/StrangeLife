@@ -2,7 +2,11 @@
 
 A planet-scale evolution sandbox that runs in the browser, inspired by SimEarth, SimLife and the real science of how life on Earth began and diversified.
 
-You start with a newborn planet: scalding seas under a thick CO₂ sky, a dim young Sun, comets raining down, and no life at all. Make it habitable, or wait for it to cool on its own, until chemistry in a warm, organic-rich shallow sea produces the first cell. Then watch life spread across the globe and branch into every domain: Bacteria, Archaea, protists, algae and plants, fungi, and animals. Oxygen from photosynthesis rusts the oceans and then fills the sky. An ozone layer forms, plants creep onto land, and animals follow, all the way to intelligence. Life icons on the globe show what lives where.
+You start with a newborn planet: scalding seas under a thick CO₂ sky, a dim young Sun, comets raining down, and no life at all. Make it habitable, or wait for it to cool on its own, until chemistry in a warm, organic-rich shallow sea produces the first cell. Then watch life spread across the globe and branch into every domain: Bacteria, Archaea, protists, algae and plants, fungi, and animals. Oxygen from photosynthesis rusts the oceans and then fills the sky. An ozone layer forms, plants creep onto land, and animals follow, all the way to intelligence.
+
+Every species carries a **genome that builds its body**. Cells, symmetry, segments, legs, shells, bones, wings and brains come from genes, and each species is drawn from its own genome on the globe and in the tree of life. New body plans appear when mutations produce them and survive only if the planet rewards them, so every world grows its own tree of life. Groups can evolve more than once, from different ancestors, or never.
+
+**[StrangeLife Classic](classic/)**, the simpler original with a fixed ladder of transitions, is still playable from `classic/` (and the `classic` branch).
 
 ## Play
 
@@ -34,13 +38,13 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 
 The **🌳 Tree of life** button (or `T`) opens a full-screen view. *Major groups* is a spindle diagram: each group's thickness over time is how many species it had. *Species* is the full phylogeny, which you can filter by kingdom or group and zoom in time. Living species are named at the tips.
 
-**Seed life** (`-`) can release any kind of organism. *Customise* lets you pick its diet, habitat, body size, climate and rainfall (or water depth), and name it.
+**Seed life** (`-`) can release any kind of organism, with a preview of the body its genome builds. *Customise* lets you pick its diet, habitat, body size, climate and rainfall (or water depth), and name it.
 
 **Saved worlds** (World tab) keeps three save slots and an autosave in your browser, and can export or import a world as a file.
 
 The panel on the right has four tabs:
 
-- **Life** lists living species grouped by kingdom. Click one to light up its range on the globe.
+- **Life** lists living species grouped by kingdom. Click one to light up its range on the globe and see its portrait, body plan and genome.
 - **Planet** shows the current eon, atmosphere gauges, and *the story of life*: a checklist of major transitions that shows the next goal and what it needs.
 - **History** charts species per kingdom, oxygen, CO₂ and temperature, plus a chronicle of events.
 - **World** holds map views, climate and evolution sliders, display options, and new-world generation.
@@ -88,22 +92,22 @@ Each zone holds the biomass of every species living there:
 - **Sexual selection.** In birds, fish and other showy animals, mate choice alone can split a population into new species.
 - **Geographic isolation (allopatric speciation).** When part of a species' range is cut off by an opening sea, a rising mountain range or a band of hostile climate, and stays cut off, it becomes a new species adapted to its own patch. Drifting continents keep making new barriers.
 - **Speciation at range edges.** Stressed populations at the edge of a range also split off as new species with a new temperature niche, diet, habitat or body size. Sexual species split faster. Speciation slows as a niche fills (diversity-dependent diversification), and crowded niches squeeze out their rarest members (competitive exclusion).
-- **Major transitions** are rare events that found new lineages, once the planet allows them:
+- **Genomes build bodies** (`genome.js`). Each species has 19 genes (cell adhesion, tissues, photosynthesis, swallowing, absorbing, meat-eating, movement, size, symmetry, segments, limbs, skeleton, plant plumbing, drought-proofing, warm blood, brain, wings, display, colour), plus its domain and any organelles gained by endosymbiosis. Development turns the genes into a body:
+  - **Organisation:** single cells, colonies, simple multicellular, or complex bodies with tissues and organs.
+  - **Diet:** from photosynthesis, swallowing or absorbing.
+  - **Body plan:** radial or bilateral, segments, limb pairs, shell, soft body or backbone, flight, warm blood, brain.
+  - **Ecology follows from the body:** oxygen need, growth, feeding, metabolism (Kleiber scaling), dispersal, climate tolerance, drought, and how hard it is to catch (size, armour, speed and wings protect prey, and predators take the easiest prey first).
+- **Groups emerge.** "Fish", "insects" or "conifers" are just the nearest description of what evolved (`classify`), shown with each species' own procedurally drawn portrait (`sprites.js`). A group can evolve several times from different ancestors (**convergent evolution**), or never.
+- **Developmental innovations.** Now and then a lineage produces a mutant with a big change in one gene its body plan can easily alter: another segment, a lost shell, legs, a bigger brain (evo-devo). Key innovations, once gained, are entrenched, and a backbone is never lost. Most mutants fail; the few that fit the planet found new kinds of life. Shores are where life rehearses for land: shore populations are selected for drought resistance.
+- **Mergers** are the only scripted transitions, because genes alone can't make them:
 
-| Transition | What it needs |
+| Merger | What it needs |
 |---|---|
-| Bacteria → Archaea | — |
-| Bacteria → Cyanobacteria (photosynthesis) | Sunlit seas |
-| Archaea + bacteria → Protists (endosymbiosis: mitochondria) | Both in one zone, a trace of O₂ |
+| Bacteria → Archaea (the deepest split) | — |
+| Archaea + bacteria → complex cells (endosymbiosis: mitochondria) | Both in one zone, a trace of O₂ |
 | Protists + cyanobacteria → Algae (chloroplasts) | Both in one zone |
-| Protists → Fungi / Sponges & cnidarians | ~1% / ~3% O₂ |
-| Algae → Seaweeds (multicellularity) | ~2% O₂ |
-| Seaweeds → Mosses (plants on land) | An ozone shield and a coast |
-| Mosses → Ferns → Conifers → Flowering plants | O₂; flowers need insects |
-| Sponges → Arthropods (Cambrian explosion) | ~7% O₂ |
-| Arthropods → Insects (animals on land) | Land plants, ozone |
-| Arthropods → Fish → Amphibians → Reptiles → Mammals / Birds | Rising O₂; tetrapods need land plants and insects |
-| Mammals → Marine mammals / Intelligence | A coast / ~14% O₂ and a widespread lineage |
+
+Everything else (photosynthesis, multicellularity, animals, land plants, forests, seeds, flowers, shells, backbones, legs on land, warm blood, flight, intelligence) evolves from genes when selection favours it, and the story checklist ticks off each one when it first takes hold.
 
 - **Oxygen paces complexity.** Complex cells and bodies need aerobic respiration. Most archaea are strict anaerobes and decline after oxygenation.
 - **Great Oxidation Event.** Photosynthesis first rusts the iron dissolved in the oceans (banded iron formations). Only then does oxygen accumulate.
@@ -129,7 +133,9 @@ style.css           styles
 src/rng.js          seeded RNG + 3D Perlin noise
 src/planet.js       geodesic grid, terrain, climate, carbon cycle, oxygen, prebiotic chemistry
 src/tectonics.js    plate tectonics: drifting plates, mountain building, rifts, supercontinent cycles
-src/ecosystem.js    zones, species, niches, population ecology, dispersal, speciation, major transitions
+src/genome.js       genes, development (genome → body), naming what evolved, ecology from the body, innovations
+src/sprites.js      procedural organism portraits drawn from each species' genome
+src/ecosystem.js    zones, species, niches, population ecology, dispersal, speciation, mergers
 src/world.js        planet + ecosystem, abiogenesis, eons, natural events, history, milestones
 src/science.js      the story of life: real-science notes for each transition
 src/names.js        procedural Latin names, styled by group
@@ -141,6 +147,8 @@ src/save.js         serialize / restore whole worlds (compressed)
 src/storage.js      save slots in IndexedDB, autosave, file export / import
 src/main.js         bootstrap, tools, input, game loop
 tools/headless.mjs  run the simulation in Node without graphics
+tools/sprites.html  a sheet of every kind of organism, for checking the drawings
+classic/            StrangeLife Classic, the original version with a fixed ladder of transitions
 vendor/             three.js r160 + OrbitControls (MIT)
 ```
 
@@ -156,10 +164,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled, and [IDEAS.md](IDEAS.md) for what's next, including the plan to go deeper than SimEarth.
 
-- Methane and an Archean organic haze
-- Civilization once intelligence appears (SimEarth's tech ages)
-- Saving and loading worlds
-- A creature/plant designer for seeding your own lineages
+Next on the list: zooming into one zone to watch individual creatures with evolved behaviour, and explicit food webs built on the genome traits.
 
 ## License
 

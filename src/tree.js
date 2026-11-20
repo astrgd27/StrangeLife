@@ -6,16 +6,14 @@
 //    matter how many species have lived.
 //  - Species: a phylogeny of individual species, filtered by kingdom or group, with names at the tips.
 
-import { GRADES, KINGDOMS, KINGDOM_KEYS, TRANSITIONS, TROPHIC_NAMES, HABITAT_NAMES } from './ecosystem.js';
+import { GRADES, KINGDOMS, KINGDOM_KEYS, TROPHIC_NAMES, HABITAT_NAMES } from './ecosystem.js';
+import { drawOrganism, spriteURL } from './sprites.js';
 import { EONS, formatYears } from './world.js';
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// which group each group evolved from (the first transition listed that produces it)
-const PARENT_GRADE = {};
-for (const t of TRANSITIONS) if (!(t.to in PARENT_GRADE)) PARENT_GRADE[t.to] = t.from;
 
 // living lineages end at the right edge, next to a pinned column of names
 function sizeCanvas(cv, w, h) {
@@ -124,8 +122,11 @@ export class TreeView {
     for (const sp of this.allSpecies()) {
       if (this.kingdom && sp.kingdom !== this.kingdom) continue;
       let g = groups.get(sp.grade);
-      if (!g) groups.set(sp.grade, (g = { grade: sp.grade, first: sp.born, last: 0, living: 0, total: 0, species: [] }));
-      g.first = Math.min(g.first, sp.born);
+      if (!g) groups.set(sp.grade, (g = { grade: sp.grade, first: sp.born, last: 0, living: 0, total: 0, species: [], firstSp: sp, origins: 0 }));
+      if (sp.born < g.first || (sp.born === g.first && sp.id < g.firstSp.id)) { g.first = sp.born; g.firstSp = sp; }
+      const par = sp.parent ? W.eco.species.get(sp.parent) : null;
+      if (!par || par.grade !== sp.grade) g.origins++;
+      if (sp.died < 0 && (!g.example || sp.range > g.example.range)) g.example = sp;
       g.last = Math.max(g.last, sp.died < 0 ? now : sp.died);
       if (sp.died < 0) g.living++;
       g.total++;
@@ -148,12 +149,22 @@ export class TreeView {
       for (let i = 0; i < N; i++) { c += diff[i]; g.curve[i] = c; if (c > maxC) maxC = c; }
     }
     this.maxC = maxC;
-    // order as a tree: each group under the group it evolved from
+    // order as a tree: each group under the group its first member evolved from (groups emerge
+    // from genes, so this is this planet's own history, not Earth's)
     const kids = new Map(), roots = [];
+    const parentGrade = (g) => {
+      let sp = g.firstSp;
+      for (let k = 0; k < 400 && sp; k++) {
+        const par = sp.parent ? W.eco.species.get(sp.parent) : null;
+        if (!par) return null;
+        if (par.grade !== g.grade && groups.has(par.grade)) return par.grade;
+        sp = par;
+      }
+      return null;
+    };
     for (const g of groups.values()) {
-      let p = PARENT_GRADE[g.grade];
-      while (p && !groups.has(p)) p = PARENT_GRADE[p];
-      g.parent = p || null;
+      const p = parentGrade(g);
+      g.parent = p && p !== g.grade ? p : null;
       if (g.parent) { if (!kids.has(g.parent)) kids.set(g.parent, []); kids.get(g.parent).push(g); } else roots.push(g);
     }
     const rows = [];
@@ -285,9 +296,7 @@ export class TreeView {
       // label, in the pinned names column
       const G = GRADES[g.grade];
       lctx.globalAlpha = faded ? 0.4 : 1;
-      lctx.font = `18px ${body}`;
-      lctx.fillStyle = ink;
-      lctx.fillText(G.icon, 10, y + 6);
+      drawOrganism(lctx, g.example || g.firstSp, 20, y + 2, 14);
       lctx.font = `600 13px ${body}`;
       lctx.fillStyle = g.living ? ink : dim;
       lctx.fillText(G.name, 38, y - 1);
@@ -322,9 +331,9 @@ export class TreeView {
       ctx.globalAlpha = faded ? 0.3 : 1;
       if (alive) {
         lctx.globalAlpha = faded ? 0.4 : 1;
-        lctx.font = `${big ? 14 : 11}px ${body}`;
+        if (big) drawOrganism(lctx, s, 15, y, 9);
+        else { lctx.font = `11px ${body}`; lctx.fillText(s.icon, 8, y + 4); }
         lctx.fillStyle = ink;
-        lctx.fillText(s.icon, 8, y + (big ? 5 : 4));
         lctx.font = `italic ${big ? 12.5 : 10.5}px ${body}`;
         lctx.fillText(s.name, big ? 30 : 24, y + 4);
         lctx.globalAlpha = 1;
@@ -387,10 +396,11 @@ export class TreeView {
     const W = this.world;
     if (this.mode === 'groups') {
       const G = GRADES[row.grade];
-      tip.innerHTML = `<b>${G.icon} ${G.name}</b><br>${KINGDOMS[G.kingdom].name} · ${KINGDOMS[G.kingdom].domain}<br>First appeared ${formatYears(W.yearsAt(row.first))}<br>${row.living ? `${row.living} species living now` : 'Extinct'} · ${row.total} species in all<br><span class="muted">Body size ${G.size}</span>`;
+      const ex = row.example || row.firstSp;
+      tip.innerHTML = `<img class="tip-pic" src="${spriteURL(ex, 64)}" width="64" height="64" alt=""><b>${G.icon} ${G.name}</b><br>${KINGDOMS[G.kingdom].name} · ${KINGDOMS[G.kingdom].domain}<br>First appeared ${formatYears(W.yearsAt(row.first))}${row.parent ? `, from ${GRADES[row.parent].name.toLowerCase()}` : ''}<br>${row.living ? `${row.living} species living now` : 'Extinct'} · ${row.total} species in all${row.origins > 1 ? `<br>Evolved ${row.origins} separate times` : ''}<br><span class="muted">${esc(ex.body || '')}</span>`;
     } else {
       const s = row, G = GRADES[s.grade];
-      tip.innerHTML = `<b>${s.icon} <i>${esc(s.name)}</i></b><br>${G.name} · ${TROPHIC_NAMES[s.trophic]} · ${HABITAT_NAMES[s.habitat]}<br>Appeared ${formatYears(W.yearsAt(s.born))}<br>${s.died < 0 ? `Living in ${s.range} zones` : `Extinct ${formatYears(W.yearsAt(s.died))} (peak ${s.peakRange} zones)`}<br><span class="muted">Prefers ${s.pref.toFixed(0)}°C${s.allopatric ? ' · split off by isolation' : s.display ? ' · split by mate choice' : s.cospeciated ? ' · split with its host plant' : ''}${s.island ? ' · island species' : ''}</span>`;
+      tip.innerHTML = `<img class="tip-pic" src="${spriteURL(s, 64)}" width="64" height="64" alt=""><b><i>${esc(s.name)}</i></b><br>${G.name} · ${TROPHIC_NAMES[s.trophic]} · ${HABITAT_NAMES[s.habitat]}<br><span class="muted">${esc(s.body || '')}</span><br>Appeared ${formatYears(W.yearsAt(s.born))}<br>${s.died < 0 ? `Living in ${s.range} zones` : `Extinct ${formatYears(W.yearsAt(s.died))} (peak ${s.peakRange} zones)`}<br><span class="muted">Prefers ${s.pref.toFixed(0)}°C${s.allopatric ? ' · split off by isolation' : s.display ? ' · split by mate choice' : s.cospeciated ? ' · split with its host plant' : ''}${s.island ? ' · island species' : ''}</span>`;
     }
     tip.hidden = false;
     const pad = 14, tw = tip.offsetWidth, th = tip.offsetHeight;

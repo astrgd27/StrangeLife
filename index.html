@@ -57,6 +57,7 @@
     </label>
     <div id="opt-preset">
       <label class="field"><span>Organism</span><select id="seed-preset"></select></label>
+      <div class="d-preview"><canvas id="d-preview" width="128" height="128" aria-hidden="true"></canvas><span id="d-preview-text" class="muted small"></span></div>
       <details class="designer" id="designer">
         <summary>Customise</summary>
         <label class="field"><span>Diet</span><select id="d-trophic"></select></label>
@@ -131,11 +132,12 @@
     <label class="field"><span>Mutation &amp; speciation <output id="out-mut" class="mono">1.0×</output></span>
       <input id="mutation" type="range" min="0.2" max="3" step="0.1" value="1">
     </label>
-    <label class="field"><span>Major transitions <output id="out-trans" class="mono">1.0×</output></span>
+    <label class="field" title="How often lineages try big developmental jumps (new body plans), and how often cells merge"><span>Innovation rate <output id="out-trans" class="mono">1.0×</output></span>
       <input id="transitions" type="range" min="0.2" max="5" step="0.1" value="1">
     </label>
     <h3>Display</h3>
     <label class="check"><input type="checkbox" id="show-icons" checked> Life icons</label>
+    <label class="check"><input type="checkbox" id="show-bodies" checked> Evolved bodies (off: emoji)</label>
     <label class="check"><input type="checkbox" id="show-clouds" checked> Clouds</label>
     <label class="check"><input type="checkbox" id="show-atmo" checked> Atmosphere</label>
     <label class="check"><input type="checkbox" id="show-cards" checked> Discovery cards</label>
@@ -211,6 +213,7 @@
     <p class="eyebrow" id="card-earth"></p>
     <h2 id="card-title"></h2>
     <p id="card-text"></p>
+    <figure class="card-pic" id="card-pic" hidden><img alt=""><figcaption></figcaption></figure>
     <div class="card-foot"><span class="muted small" id="card-more"></span><button class="primary" id="card-close">Continue</button></div>
   </div>
 </section>
@@ -225,7 +228,7 @@
     <ul class="how">
       <li><b>Look around.</b> Drag to spin the planet. Scroll or pinch to zoom in. Icons show what lives in each region.</li>
       <li><b>Kindle life.</b> Life needs liquid water, warm shallow seas and organic molecules. Volcanic vents, lightning and comets make them. The <i>Planet</i> tab tracks your progress.</li>
-      <li><b>Watch it evolve.</b> Oxygen from photosynthesis rusts the oceans, then fills the sky. Complex cells, multicellular life, land plants and animals each need the planet to be ready.</li>
+      <li><b>Watch it evolve.</b> Every species has a genome that builds its body: cells, symmetry, segments, legs, shells, bones, wings, a brain. Mutations invent new body plans, and the planet decides which survive, so no two worlds grow the same tree of life.</li>
       <li><b>Meddle.</b> Raise continents, warm or freeze the climate, seed organisms, or drop an asteroid and see who survives.</li>
     </ul>
     <p class="muted small">With a terraforming tool selected, left-drag paints and right-drag spins. Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd>, <kbd>-</kbd>, <kbd>=</kbd> tools, <kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> speed, <kbd>T</kbd> tree of life.</p>

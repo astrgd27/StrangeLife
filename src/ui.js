@@ -4,6 +4,36 @@ import { GRADES, KINGDOMS, KINGDOM_KEYS, TROPHIC_NAMES, HABITAT_NAMES, MAXT } fr
 import { EONS, formatYears } from './world.js';
 import { STORY, EVENTS, storyByKey } from './science.js';
 import { CIV_STAGES } from './civ.js';
+import { spriteURL } from './sprites.js';
+import { GENES, GENE_INFO, GI } from './genome.js';
+
+// the genes worth showing for each kind of body (others are switched off or don't matter)
+const GENE_LABELS = {
+  adhesion: 'Cells stick', differentiation: 'Tissues', photo: 'Sunlight', ingest: 'Swallowing', absorb: 'Absorbing',
+  carnivory: 'Meat-eating', motility: 'Movement', size: 'Size', symmetry: 'Head & tail', segments: 'Segments',
+  limbs: 'Limbs', skeleton: 'Skeleton', vascular: 'Plumbing', landAdapt: 'Drought-proof', endothermy: 'Warm blood',
+  brain: 'Brain', wings: 'Wings', display: 'Display',
+};
+function shownGenes(sp) {
+  const ph = sp.ph;
+  if (!ph) return [];
+  if (!ph.euk) return ['photo', 'absorb', 'adhesion', 'motility'];
+  if (ph.level <= 1) return ['adhesion', 'photo', 'ingest', 'absorb', 'carnivory', 'motility'];
+  if (ph.plant) return ['adhesion', 'differentiation', 'vascular', 'landAdapt', 'display', 'size'];
+  if (ph.fungus) return ['adhesion', 'differentiation', 'absorb', 'landAdapt', 'size'];
+  if (ph.level === 2) return ['adhesion', 'differentiation', 'symmetry', 'motility', 'carnivory', 'size'];
+  return ['symmetry', 'segments', 'limbs', 'skeleton', 'size', 'motility', 'landAdapt', 'endothermy', 'brain', 'wings', 'carnivory', 'display'];
+}
+function genomeHTML(sp) {
+  return `<div class="genome">${shownGenes(sp).map((k) => {
+    const v = sp.genes[GI[k]];
+    return `<span class="gene" title="${esc(GENE_INFO[k])}"><span class="gn">${GENE_LABELS[k]}</span><span class="gbar"><i style="width:${Math.round(v * 100)}%"></i></span></span>`;
+  }).join('')}</div>`;
+}
+export function portrait(sp, px = 72) {
+  const url = spriteURL(sp, px);
+  return url ? `<img class="portrait" src="${url}" width="${px}" height="${px}" alt="">` : '';
+}
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -97,7 +127,7 @@ export class UI {
       const text = story ? `${story.icon} ${story.title}` : e.text;
       this.toast(text, e.bad ? 'bad' : 'star');
       this.chronicle(e.tick, story ? `${story.title}.` : e.text, e.bad);
-      if (story) this.openCard(story);
+      if (story) this.openCard({ ...story, tick: e.tick });
       else if (ev && !this.seenEvents?.has(e.event)) { (this.seenEvents ||= new Set()).add(e.event); this.openCard(ev); }
     } else if (e.type === 'extinction') {
       if (e.species.peakRange < 20) return; // only species that had spread widely
@@ -131,6 +161,21 @@ export class UI {
     } else if (e.type === 'allopatric') {
       if (!this.seenEvents?.has('allopatric')) { (this.seenEvents ||= new Set()).add('allopatric'); this.openCard(EVENTS.allopatric); }
       if (e.zones >= 12) this.chronicle(e.tick, `${e.species.icon} Cut off from the rest of its range, a population of ${e.parent.name} becomes a new species, ${e.species.name}.`);
+    } else if (e.type === 'newgroup') {
+      const G = GRADES[e.grade], sp = e.species;
+      this.chronicle(e.tick, `${sp.icon} A new kind of life: ${G.name.toLowerCase()}${sp.body ? ` (${sp.body})` : ''}, from ${e.parent ? e.parent.name : 'seeded life'}.`);
+      // put the new creature's portrait on the discovery card that announced it
+      const url = spriteURL(sp, 96);
+      for (const c of this.cards) if (c.tick === e.tick && !c.img) { c.img = url; c.caption = `${sp.name}: ${sp.body}`; }
+      if (this.cards[0]?.tick === e.tick) this.renderCard();
+      this.firstCard('bodyplan');
+    } else if (e.type === 'convergent') {
+      const g = e.grade;
+      this.firstCard('convergent');
+      if (e.tick - ((this.convNoted ||= {})[g] ?? -1e9) > 3000) {
+        this.convNoted[g] = e.tick;
+        this.chronicle(e.tick, `${e.species.icon} Convergent evolution: ${GRADES[g].name.toLowerCase()} evolve again, this time from ${e.parent.name} (${GRADES[e.parent.grade].name.toLowerCase()}).`);
+      }
     } else if (e.type === 'lineage') {
       const g = e.species.grade;
       if (e.tick - ((this.lineageNoted ||= {})[g] ?? -1e9) > 1500) { this.lineageNoted[g] = e.tick; this.chronicle(e.tick, `${e.species.icon} ${GRADES[g].name} arise again, from ${e.parent.name}.`); }
@@ -188,6 +233,8 @@ export class UI {
     const c = this.cards[0];
     if (!c) { $('card').hidden = true; return; }
     $('card-icon').textContent = c.icon || '✦';
+    const pic = $('card-pic');
+    if (pic) { pic.hidden = !c.img; if (c.img) { pic.querySelector('img').src = c.img; pic.querySelector('figcaption').textContent = c.caption || ''; } }
     $('card-title').textContent = c.title;
     $('card-earth').textContent = c.earth ? `On Earth: ${c.earth}` : '';
     $('card-text').textContent = c.text;
@@ -244,9 +291,11 @@ export class UI {
       let detail = '';
       if (active) {
         const parent = sp.parent ? E.species.get(sp.parent) : null;
-        detail = `<dl class="sp-detail">
-          <dt>Group</dt><dd>${G.name} · ${KINGDOMS[sp.kingdom].domain}</dd>
-          <dt>Body size</dt><dd>${G.size}</dd>
+        const origins = E.originsOf(sp.grade);
+        detail = `<div class="sp-body">${portrait(sp, 84)}<div><div class="sp-plan">${esc(sp.body || '')}</div>${genomeHTML(sp)}</div></div>
+        <dl class="sp-detail">
+          <dt>Looks like</dt><dd>${G.name} · ${KINGDOMS[sp.kingdom].domain}${origins > 1 ? ` <span class="muted">(evolved ${origins} separate times)</span>` : ''}</dd>
+          <dt>Cells</dt><dd>${sp.domain === 'eukaryote' ? `Complex cells${sp.mito ? ', mitochondria' : ''}${sp.chloro ? ', chloroplasts' : ''}` : 'Simple cells (no nucleus)'}</dd>
           <dt>Appeared</dt><dd>${formatYears(sp.bornYears)}${parent ? ` from <i>${esc(parent.name)}</i>` : ''}</dd>
           <dt>Range</dt><dd>${sp.range} zones (peak ${sp.peakRange})</dd>
           <dt>Climate</dt><dd>${sp.pref.toFixed(0)}°C ± ${sp.tol.toFixed(0)}°</dd>
@@ -254,7 +303,8 @@ export class UI {
           ${sp.allopatric ? '<dt>Origin</dt><dd>Split off after its population was isolated</dd>' : sp.display ? '<dt>Origin</dt><dd>Split by mate choice (sexual selection)</dd>' : sp.cospeciated ? '<dt>Origin</dt><dd>Split along with its host plant</dd>' : ''}
           ${sp.host && E.species.get(sp.host) ? `<dt>Specialist</dt><dd>Feeds on ${E.species.get(sp.host).icon} <i>${esc(E.species.get(sp.host).name)}</i>${E.species.get(sp.host).died >= 0 ? ' (extinct)' : ''}</dd>` : ''}
           ${sp.island ? '<dt>Island</dt><dd>Evolved on an island; found nowhere else</dd>' : ''}
-          <dt>Needs O₂</dt><dd>${G.o2 ? `${G.o2}% or more` : 'none (anaerobic)'}</dd>
+          <dt>Needs O₂</dt><dd>${sp.eco?.o2 ? `${sp.eco.o2.toFixed(1)}% or more` : 'none (anaerobic)'}</dd>
+          ${sp.trophic !== 1 && sp.eco && sp.ph?.animal ? `<dt>Defences</dt><dd>${defenceText(sp)}</dd>` : ''}
           <dt>Reproduction</dt><dd>${sp.sexual ? 'Sexual' : 'Asexual (cloning or splitting)'}</dd>
         </dl>`;
       }
@@ -492,3 +542,13 @@ function emptyChart(ctx, w, h) {
 }
 
 export { MAXT };
+
+function defenceText(sp) {
+  const ph = sp.ph, out = [];
+  if (ph.size > 0.5) out.push('large');
+  if (ph.skeleton === 'exo') out.push(ph.limbs ? 'armoured' : 'shelled');
+  if (ph.flying) out.push('flies');
+  if (ph.motile && ph.motility > 0.6) out.push('fast');
+  const v = sp.eco.vuln;
+  return `${out.length ? out.join(', ') + ' · ' : ''}${v > 0.6 ? 'easy prey' : v > 0.35 ? 'hard to catch' : 'very hard to catch'}`;
+}

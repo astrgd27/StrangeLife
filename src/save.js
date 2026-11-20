@@ -8,7 +8,7 @@
 import { World } from './world.js';
 import { Civilization } from './civ.js';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2; // 2: species carry genomes
 
 // ---------- encoding helpers ----------
 
@@ -46,7 +46,7 @@ export function serialize(world, meta = {}) {
   // biomass is mostly empty: store only occupied entries
   const idx = [], val = [];
   for (let i = 0; i < E.B.length; i++) if (E.B[i] > 0) { idx.push(i); val.push(E.B[i]); }
-  const species = [...E.species.values()].map((sp) => ({ ...scalars(sp, ['_p']) }));
+  const species = [...E.species.values()].map((sp) => ({ ...scalars(sp, ['_p', 'body']), genes: Array.from(sp.genes) }));
   return {
     version: SAVE_VERSION,
     meta: { savedAt: new Date().toISOString(), years: world.years, eon: world.eon, species: E.alive.length, ...meta },
@@ -75,6 +75,7 @@ export function serialize(world, meta = {}) {
       bIdx: packTA(Int32Array.from(idx)), bVal: packTA(Float32Array.from(val)),
       detS: packTA(E.detS), detL: packTA(E.detL),
       specLog: E.specLog, radiationNoted: E.radiationNoted,
+      groupOrigins: E.groupOrigins, groupsSeen: [...(E.groupsSeen || [])],
     },
   };
 }
@@ -82,6 +83,7 @@ export function serialize(world, meta = {}) {
 // ---------- load ----------
 
 export function deserialize(data) {
+  if (data?.version === 1) throw new Error('This world was saved before genomes existed. Open it in StrangeLife Classic.');
   if (!data || data.version !== SAVE_VERSION) throw new Error('This save file is from a different version of StrangeLife.');
   // rebuild the same planet from its seed, then overwrite everything that has changed since
   const w = new World(data.seed, { scenario: data.scenario });
@@ -107,12 +109,14 @@ export function deserialize(data) {
 
   // ecosystem: species, then where they live
   const e = data.eco;
-  const { species, alive, innovations, bIdx, bVal, detS, detL, specLog, radiationNoted, ...eScalars } = e;
+  const { species, alive, innovations, bIdx, bVal, detS, detL, specLog, radiationNoted, groupOrigins, groupsSeen, ...eScalars } = e;
   Object.assign(E, eScalars);
   E.species = new Map();
   E.slots.fill(null);
   for (const sp of species) {
+    sp.genes = Float32Array.from(sp.genes);
     E.species.set(sp.id, sp);
+    E.develop(sp); // rebuild the body from the genome
   }
   E.alive = [];
   for (const s of alive) {
@@ -124,6 +128,8 @@ export function deserialize(data) {
   E.innovations = new Set(innovations);
   E.specLog = specLog || {};
   E.radiationNoted = radiationNoted || {};
+  E.groupOrigins = groupOrigins || {};
+  E.groupsSeen = new Set(groupsSeen || []);
   E.B.fill(0);
   E.presN.fill(0);
   const I = unpackTA(bIdx), V = unpackTA(bVal);

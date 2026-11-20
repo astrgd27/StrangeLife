@@ -5,7 +5,8 @@ import { World } from './world.js';
 import { Renderer } from './render.js';
 import { UI } from './ui.js';
 import { TreeView } from './tree.js';
-import { GRADES, GRADE_KEYS } from './ecosystem.js';
+import { GRADES, GRADE_KEYS, previewSpecies } from './ecosystem.js';
+import { drawOrganism } from './sprites.js';
 import { SLOTS, listSaves, saveToSlot, loadFromSlot, exportWorld, importWorld, describeSave } from './storage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -77,9 +78,20 @@ function refreshDesignerLabels() {
   const adapt = $('d-adapt').checked;
   $('d-temp-wrap').hidden = adapt; $('d-n2-wrap').hidden = adapt;
   $('d-n2-label').textContent = +$('d-habitat').value === 0 ? 'Water depth (shallow → deep)' : 'Rainfall (desert → rainforest)';
+  drawPreview();
+}
+// show the body the chosen genome will build
+function drawPreview() {
+  const g = $('seed-preset').value, open = $('designer').open;
+  const sp = previewSpecies(g, open ? { trophic: +$('d-trophic').value, habitat: +$('d-habitat').value, size: +$('d-size').value } : {});
+  const cv = $('d-preview'), ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  drawOrganism(ctx, sp, 64, 64, 54);
+  $('d-preview-text').textContent = sp.grade === g ? sp.body : `${sp.body}. With these choices it grows into ${GRADES[sp.grade].name.toLowerCase()}.`;
 }
 $('seed-preset').addEventListener('change', refreshDesigner);
-['d-size', 'd-temp', 'd-adapt', 'd-habitat'].forEach((id) => $(id).addEventListener('input', refreshDesignerLabels));
+['d-size', 'd-temp', 'd-adapt', 'd-habitat', 'd-trophic'].forEach((id) => $(id).addEventListener('input', refreshDesignerLabels));
+$('designer').addEventListener('toggle', drawPreview);
 refreshDesigner();
 function designerOptions() {
   if (!$('designer').open) return { seeded: true };
@@ -178,8 +190,8 @@ function click(x, y, pointerType) {
     const g = $('seed-preset').value;
     const sp = E.seed(g, E.zoneOf[cell], designerOptions());
     if (!sp) { ui.toast('Too many species alive to add another right now.', 'bad'); return; }
-    if (!E.habitatOk(sp.habitat, E.zoneOf[cell])) ui.toast(`${GRADES[g].name} need ${['open sea', 'a coastline', 'dry land'][sp.habitat]} to live.`, 'bad');
-    else ui.toast(`You seeded ${sp.icon} ${sp.name} (${GRADES[g].name.toLowerCase()}).`, 'star');
+    if (!E.habitatOk(sp.habitat, E.zoneOf[cell])) ui.toast(`${GRADES[sp.grade].name} need ${['open sea', 'a coastline', 'dry land'][sp.habitat]} to live.`, 'bad');
+    else ui.toast(`You seeded ${sp.icon} ${sp.name} (${GRADES[sp.grade].name.toLowerCase()}).`, 'star');
     ui.chronicle(world.tick, `${sp.icon} ${sp.name} was seeded onto the planet.`);
     renderer.updateIcons();
   } else if (tool === 'meteor') {
@@ -270,6 +282,7 @@ document.querySelectorAll('#overlay-seg button').forEach((b) => b.addEventListen
   renderer.updateColors();
 }));
 $('show-icons').addEventListener('change', (e) => { renderer.showIcons = e.target.checked; renderer.updateIcons(); });
+$('show-bodies').addEventListener('change', (e) => { renderer.showBodies = e.target.checked; renderer.updateIcons(); });
 $('show-clouds').addEventListener('change', (e) => (renderer.showClouds = e.target.checked));
 $('show-atmo').addEventListener('change', (e) => (renderer.atmosphere.visible = e.target.checked));
 $('show-cards').addEventListener('change', (e) => { ui.showCards = e.target.checked; if (!ui.showCards) { ui.cards = []; ui.renderCard(); } });

@@ -13,6 +13,8 @@ w.on((e) => {
   if (e.type === 'cospeciation') co++;
   if (e.type === 'sexualsel') ss++;
   if (e.type === 'island') isl++;
+  if (e.type === 'newgroup') console.log(`[${e.tick} ${formatYears(e.years)}] new group ${e.grade} from ${e.parent?.grade}: ${e.species.body}`);
+  if (e.type === 'convergent') console.log(`[${e.tick}] convergent ${e.grade} #${e.count} from ${e.parent.grade}`);
   if (e.type === 'radiation') console.log(`[${e.tick}] radiation of ${e.grade} (${e.count})`);
 });
 console.log(`gen ${Date.now() - t0}ms`);

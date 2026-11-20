@@ -179,6 +179,18 @@ input[type='range'] { accent-color: var(--sun); width: 100%; }
 .sp-detail { grid-column: 1 / 4; margin-top: 6px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; }
 .sp-detail dt { color: var(--ink-dim); }
 .sp-detail dd { margin: 0; }
+.sp-body { grid-column: 1 / 4; display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+.sp-body > div { flex: 1; min-width: 0; }
+.sp-plan { font-size: 12px; color: var(--ink); margin-bottom: 6px; }
+.portrait { flex: none; border-radius: 12px; background: radial-gradient(circle at 50% 40%, rgba(120,160,220,.16), rgba(8,12,22,.5)); border: 1px solid rgba(255,255,255,.08); }
+.genome { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 10px; }
+.gene { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ink-dim); }
+.gbar { height: 5px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
+.gbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--leaf), var(--sun)); }
+.card-pic { margin: 10px 0 0; display: flex; align-items: center; gap: 10px; }
+.card-pic img { width: 96px; height: 96px; border-radius: 14px; background: radial-gradient(circle at 50% 40%, rgba(120,160,220,.18), rgba(8,12,22,.55)); }
+.card-pic figcaption { font-size: 12px; color: var(--ink-dim); }
+.tip-pic { float: right; margin: 0 0 4px 8px; border-radius: 10px; background: rgba(8,12,22,.5); }
 
 .chart { width: 100%; display: block; border-radius: 6px; background: rgba(0, 0, 0, 0.25); }
 .legend { display: flex; gap: 4px 12px; flex-wrap: wrap; align-items: center; margin-top: 6px; color: var(--ink-dim); }
@@ -424,3 +436,6 @@ input[type='range'] { accent-color: var(--sun); width: 100%; }
 
 .linkish { background: none; border: 0; padding: 0; color: var(--sun); text-decoration: underline; font-size: 12px; }
 .card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+
+.d-preview { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
+.d-preview canvas { width: 64px; height: 64px; flex: none; border-radius: 12px; background: radial-gradient(circle at 50% 40%, rgba(120,160,220,.16), rgba(8,12,22,.5)); }

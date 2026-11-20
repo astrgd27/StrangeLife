@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StrangeLife organism sprites</title>
+<style>
+  body { background: #0b1020; color: #cfd8e6; font: 12px system-ui, sans-serif; margin: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, 150px); gap: 10px; }
+  figure { margin: 0; text-align: center; }
+  canvas { background: radial-gradient(circle at 50% 40%, rgba(120,160,220,.16), rgba(8,12,22,.5)); border-radius: 12px; }
+</style>
+</head>
+<body>
+<p>Every kind of organism drawn from its archetype genome (development check: <code>python3 -m http.server</code>, then open <code>/tools/sprites.html</code>). Small versions are shown at globe-icon size.</p>
+<div class="grid" id="g"></div>
+<script type="module">
+import { GRADE_KEYS, GRADES, previewSpecies } from '../src/ecosystem.js';
+import { drawOrganism } from '../src/sprites.js';
+const g = document.getElementById('g');
+const extra = [['fish', { trophic: 4 }], ['mammal', { trophic: 4, size: 0.9 }], ['insect', { trophic: 4 }], ['flower', { size: 0.2 }], ['bacteria', { trophic: 2 }]];
+for (const [grade, opts] of [...GRADE_KEYS.map((k) => [k, {}]), ...extra]) {
+  for (const hue of [0.1, 0.6]) {
+    const sp = previewSpecies(grade, { ...opts, hue });
+    const f = document.createElement('figure');
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128; cv.style.width = cv.style.height = '128px';
+    drawOrganism(cv.getContext('2d'), sp, 64, 64, 54);
+    const sm = document.createElement('canvas'); sm.width = sm.height = 28;
+    const c2 = sm.getContext('2d'); c2.beginPath(); c2.arc(14, 14, 13, 0, 7); c2.fillStyle = 'rgba(8,12,22,.6)'; c2.fill();
+    drawOrganism(c2, sp, 14, 14, 12);
+    f.append(cv, sm);
+    const cap = document.createElement('figcaption'); cap.textContent = `${grade}${sp.grade !== grade ? ' → ' + sp.grade : ''}`; f.append(cap);
+    g.append(f);
+  }
+}
+</script>
+</body>
+</html>

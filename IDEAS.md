@@ -45,16 +45,18 @@ Where StrangeLife could go next. ⭐ marks the ones to do first. For how the cur
 
 SimEarth (1990) gave life a fixed menu: about 15 predefined groups, each moving up a set ladder. StrangeLife already goes further, with real species, phylogeny, niches, isolation, coevolution and Earth-system feedbacks. But its groups (fish, reptiles…) and the transitions between them are still a hand-written table. The next leap is for life to **invent itself**: forms, abilities and transitions emerge from genes and selection rather than a script. On other worlds, that means life that is genuinely *strange*, not a replay of Earth.
 
-### A. A real genome that builds the body ⭐
+### A. A real genome that builds the body ✅ built
 - **Genomes, not labels.** Every species carries a compact genome: trait genes (size, metabolism, temperature range…) plus a small developmental program. The program describes body symmetry, number of segments, limbs, skeleton, sense organs, and surface (shell, scales, fur, leaves).
 - **Procedural organisms.** Each species is drawn from its own genome, so you watch body forms actually change down the tree of life: segments fuse, limbs appear, shells are lost. This is *evolved*, not designed as in Spore.
 - **Groups emerge.** Instead of fixed groups, labels are worked out from traits ("a segmented, armoured, land-walking grazer"). Life on another planet won't have "fish"; it will have whatever evolves.
 - **Evo-devo constraints.** Developmental genes are reused, so some changes are easy (another segment) and some hard (a new body plan). This produces homology, vestigial organs and deep body-plan stability, as on Earth.
 
-### B. Major transitions that emerge
+### B. Major transitions that emerge ✅ built
 - Multicellularity appears when genes for cell adhesion and division of labour evolve, and pays off only when the environment rewards size.
 - Endosymbiosis is an actual merger of two species' genomes and abilities.
 - Photosynthesis, oxygen tolerance, flight, warm-bloodedness and intelligence become abilities built from gene combinations, with real costs and benefits. They can evolve more than once (convergent evolution) or never.
+
+**What was built (A + B):** 19 genes per species develop into a body (cells, symmetry, segments, limbs, shell/soft/bone, wings, warm blood, brain, plant plumbing, flowers). Ecology, defences and oxygen needs come from the body. Groups are worked out from the body and can evolve several times (convergent evolution). Big developmental jumps are limited to what each body plan can easily change, and key innovations are entrenched. Only the three cell mergers (the archaeal split, mitochondria, chloroplasts) are scripted. Every species is drawn from its genome. Still to do from A: homology and vestigial organs, and surfaces (scales, fur, leaves) as genes.
 
 ### C. True population genetics
 - **Genetic variation inside each species**, not just an average, so selection works on real variation and drift dominates in small populations.
@@ -81,7 +83,7 @@ SimEarth (1990) gave life a fixed menu: about 15 predefined groups, each moving 
 - **Export data** for students and researchers.
 
 ### Suggested path
-1. **A + B: genome-built bodies and emergent groups.** The biggest single step past SimEarth, and it makes every planet's tree of life unique and visible.
+1. ✅ **A + B: genome-built bodies and emergent groups.** The biggest single step past SimEarth, and it makes every planet's tree of life unique and visible.
 2. **D: zoom to individuals in one zone.** Where behaviour and the "wow" moments live.
 3. **E: explicit food webs.** Deeper ecology, built on the genome traits from step 1.
 4. **G: laboratory tools.** Cheap to add once 1–3 exist, and they turn the game into real science.

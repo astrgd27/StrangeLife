@@ -40,6 +40,16 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
   - The *Endemics* map view lights up zones holding species found in ≤15 zones.
   - Sexual animals (birds most, then fish and insects) can speciate by mate choice with no niche change (`speciate(..., 'sexual')`).
 
+## 7. Genomes, emergent body plans and convergence
+- **Real:** bodies are built by developmental genes (Hox genes lay out segments and limbs). Some changes are easy (another segment, a lost shell), others hard (a whole new body plan), so body plans stay stable for hundreds of millions of years. The same solutions evolve repeatedly in unrelated lineages (eyes, flight, crab-like bodies).
+- **Game:**
+  - `genome.js`: 19 genes per species, `develop()` (genome → body), `classify()` (body → nearest familiar group), `ecology()` (body → growth, feeding, oxygen need, metabolism, defences, drought).
+  - `evolvable()`: which genes a body plan can change with a big jump. Key innovations are entrenched once gained, and genes the body doesn't use yet stay in their ground state.
+  - `Ecosystem.evolve()`: developmental innovations rolled per group; `establish()` records new groups and convergent origins once a new kind of life takes hold.
+  - Prey are weighted by vulnerability (size, armour, speed, wings), so predators take the easiest prey first.
+  - Shore populations are selected for drought resistance (`LAND_TARGET`), so land is colonised from the coasts.
+  - `sprites.js` draws every species from its genome: on the globe, in the Life panel, in the tree of life and on discovery cards.
+
 ## Also built
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)
 - Civilization stages after intelligence (`civ.js`)

@@ -4,12 +4,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { KINGDOMS, MAXT } from './ecosystem.js';
+import { drawOrganism } from './sprites.js';
 import { makeNoise3, mulberry32 } from './rng.js';
 
 const LAND_H = 0.045;  // terrain exaggeration above sea level
 const SEA_H = 0.03;    // depth exaggeration below
-const ATLAS_GRID = 12; // icons per atlas row
-const ATLAS_CELL = 80;
+const ATLAS_GRID = 16; // icons per atlas row
+const ATLAS_CELL = 64;
 
 export function surfaceRadius(e) {
   return 1 + (e > 0 ? e * LAND_H : e * SEA_H);
@@ -38,6 +39,7 @@ export class Renderer {
     this.highlight = null;   // species whose range is highlighted
     this.showClouds = true;
     this.showIcons = true;
+    this.showBodies = true; // draw each species' evolved body instead of an emoji
     this.effects = [];
 
     const r = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true }));
@@ -249,30 +251,44 @@ export class Renderer {
     this.planetGroup.add(this.icons);
   }
 
-  atlasSlot(icon, kingdom) {
-    const key = icon + '|' + kingdom;
+  atlasSlot(sp) {
+    const body = this.showBodies && sp.ph;
+    const key = body ? `b${sp.id}|${sp.grade}` : sp.icon + '|' + sp.kingdom;
     let i = this.atlasIndex.get(key);
     if (i !== undefined) return i;
     i = this.atlasIndex.size;
-    if (i >= ATLAS_GRID * ATLAS_GRID) return 0;
+    if (i >= ATLAS_GRID * ATLAS_GRID) {
+      // full: start the atlas over (the icon pass that hit this redraws what it needs)
+      this.atlasIndex.clear();
+      this.atlasCtx.clearRect(0, 0, this.atlasCanvas.width, this.atlasCanvas.height);
+      this.atlasReset = true;
+      i = 0;
+    }
     this.atlasIndex.set(key, i);
     const ctx = this.atlasCtx, S = ATLAS_CELL;
     const x = (i % ATLAS_GRID) * S, y = Math.floor(i / ATLAS_GRID) * S;
     const cx = x + S / 2, cy = y + S / 2, r = S * 0.44;
     ctx.save();
+    ctx.clearRect(x, y, S, S);
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(8,12,22,0.55)'; ctx.fill();
-    ctx.lineWidth = S * 0.06; ctx.strokeStyle = KINGDOMS[kingdom]?.color || '#ccc'; ctx.stroke();
-    ctx.font = `${Math.round(S * 0.5)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(icon, cx, cy + S * 0.03);
+    ctx.fillStyle = 'rgba(8,12,22,0.6)'; ctx.fill();
+    ctx.lineWidth = S * 0.06; ctx.strokeStyle = KINGDOMS[sp.kingdom]?.color || '#ccc'; ctx.stroke();
+    if (body) {
+      ctx.beginPath(); ctx.arc(cx, cy, r - S * 0.03, 0, Math.PI * 2); ctx.clip();
+      drawOrganism(ctx, sp, cx, cy, r * 0.95);
+    } else {
+      ctx.font = `${Math.round(S * 0.5)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(sp.icon, cx, cy + S * 0.03);
+    }
     ctx.restore();
     this.atlasTex.needsUpdate = true;
     return i;
   }
 
   // rebuild the icon layer from the current biosphere
-  updateIcons() {
+  updateIcons(retry = true) {
+    this.atlasReset = false;
     const W = this.world, E = W.eco, P = W.planet;
     const zp = E.zgrid.pos;
     const hl = this.highlight && this.highlight.died < 0 ? this.highlight : null;
@@ -281,7 +297,7 @@ export class Renderer {
     const OFFS = [[0, 0.5], [-0.62, -0.45], [0.62, -0.45]];
     let lod = 0;
     const put = (sp, x, y, z, size, rank) => {
-      const slot = this.atlasSlot(sp.icon, sp.kingdom);
+      const slot = this.atlasSlot(sp);
       this.iconPos[n * 3] = x; this.iconPos[n * 3 + 1] = y; this.iconPos[n * 3 + 2] = z;
       this.iconCell[n * 2] = slot % ATLAS_GRID;
       this.iconCell[n * 2 + 1] = Math.floor(slot / ATLAS_GRID);
@@ -309,6 +325,8 @@ export class Renderer {
         put(list[k], cx + (t1.x * o[0] + t2.x * o[1]) * d, cy + (t1.y * o[0] + t2.y * o[1]) * d, cz + (t1.z * o[0] + t2.z * o[1]) * d, k === 0 ? 0.04 : 0.034, 2);
       }
     }
+    // the atlas filled up and was restarted mid-pass: earlier icons point at stale cells
+    if (this.atlasReset && retry) return this.updateIcons(false);
     this.icons.geometry.setDrawRange(0, n);
     const g = this.icons.geometry;
     g.attributes.position.needsUpdate = true;
