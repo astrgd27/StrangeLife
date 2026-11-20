@@ -111,7 +111,7 @@ export function develop(sp) {
   // partners: algae living in coral tissues, gut microbes that digest plants, root bacteria that fix nitrogen
   const sy = G('symbiosis') > 0.6;
   const partner = !sy ? null
-    : animal && !motile && trophic !== 6 ? 'algae'
+    : animal && !motile && trophic !== 6 && skeleton !== 'endo' ? 'algae'
     : animal && level === 3 && (trophic === 3 || trophic === 5) ? 'gut'
     : plant && G('vascular') >= 0.35 ? 'roots' : null;
   return {
