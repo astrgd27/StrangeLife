@@ -418,5 +418,9 @@ input[type='range'] { accent-color: var(--sun); width: 100%; }
 .save-btns button { padding: 3px 9px; font-size: 12px; }
 .save-btns button:disabled { opacity: 0.35; cursor: default; }
 
+.intro-actions { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+.classic-link { color: var(--ink-dim); font-size: 13px; }
+.classic-link:hover { color: var(--sun); }
+
 .linkish { background: none; border: 0; padding: 0; color: var(--sun); text-decoration: underline; font-size: 12px; }
 .card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
