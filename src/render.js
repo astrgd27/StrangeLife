@@ -405,6 +405,15 @@ export class Renderer {
       }
     } else {
       P.colors(out, this.overlay);
+      if (this.overlay === 'biome' || !this.overlay) {
+        // rivers and lakes
+        for (let c = 0; c < P.n; c++) {
+          const f = P.fresh[c];
+          if (!f || P.water[c]) continue;
+          const k = P.lake[c] ? 0.85 : 0.35 + 0.6 * f;
+          out[c * 3] += (0.13 - out[c * 3]) * k; out[c * 3 + 1] += (0.36 - out[c * 3 + 1]) * k; out[c * 3 + 2] += (0.62 - out[c * 3 + 2]) * k;
+        }
+      }
     }
     const hl = this.highlight && this.highlight.died < 0 ? this.highlight : null;
     if (hl) {

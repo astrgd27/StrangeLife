@@ -311,7 +311,7 @@ input[type='range'] { accent-color: var(--sun); width: 100%; }
 .sp { grid-template-columns: 24px 1fr auto; }
 .tag.t0 { color: #c9a8ff; } .tag.t1 { color: var(--leaf); } .tag.t2 { color: #d2a879; }
 .tag.t3 { color: #a8d86a; } .tag.t4 { color: var(--danger); } .tag.t5 { color: #f0a36a; }
-.tag.h0 { color: #8cc4ff; } .tag.h1 { color: #9fe0d0; } .tag.h2 { color: #d8c48a; }
+.tag.h0 { color: #8cc4ff; } .tag.h1 { color: #9fe0d0; } .tag.h2 { color: #d8c48a; } .tag.h3 { color: #7fd6ff; }
 
 /* ---------- planet ---------- */
 .eon-card { padding: 10px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); margin-bottom: 10px; }

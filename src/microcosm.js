@@ -48,16 +48,20 @@ export class Microcosm {
     // plant food: patchy, as rich as the zone's producers
     const life = E.speciesIn(z);
     this.life = life;
-    const prod = { sea: [], land: [] };
+    const prod = { sea: [], land: [], fresh: [] };
     for (const { sp, b } of life) {
       if (sp.trophic !== 1) continue;
-      if (sp.habitat !== 2) prod.sea.push({ sp, b });
-      if (sp.habitat !== 0) prod.land.push({ sp, b });
+      if (sp.habitat === 0 || sp.habitat === 1) prod.sea.push({ sp, b });
+      if (sp.habitat === 1 || sp.habitat === 2) prod.land.push({ sp, b });
+      if (sp.habitat === 3) prod.fresh.push({ sp, b });
     }
-    prod.sea.sort((a, b) => b.b - a.b); prod.land.sort((a, b) => b.b - a.b);
-    this.producers = { sea: prod.sea.slice(0, 3).map((q) => q.sp), land: prod.land.slice(0, 3).map((q) => q.sp) };
+    for (const k in prod) prod[k].sort((a, b) => b.b - a.b);
+    this.producers = { sea: prod.sea.slice(0, 3).map((q) => q.sp), land: prod.land.slice(0, 3).map((q) => q.sp), fresh: prod.fresh.slice(0, 3).map((q) => q.sp) };
     const capS = prod.sea.length ? 0.25 + 0.75 * E.coverS[z] : 0.04;
     const capL = prod.land.length ? 0.25 + 0.75 * E.coverL[z] : 0.04;
+    const capF = prod.fresh.length ? 0.6 : 0.05;
+    // a river winds across the land if the zone has fresh water
+    this.river = this.seaFrac < 1 && E.zFw[z] > 0.02 ? { w: 24 + 70 * Math.min(1, E.zFw[z] * 6), ph: this.rng() * 6, y0: MH * (0.3 + 0.4 * this.rng()) } : null;
     this.cap = new Float32Array(GW * GH);
     this.food = new Float32Array(GW * GH);
     const ph1 = this.rng() * 6, ph2 = this.rng() * 6;
@@ -65,7 +69,7 @@ export class Microcosm {
       const x = (gx + 0.5) * CELL, y = (gy + 0.5) * CELL;
       const patch = 0.5 + 0.25 * Math.sin(x / 70 + ph1) * Math.sin(y / 55 + ph2) + 0.25 * Math.sin((x + y) / 33 + ph2);
       const c = gy * GW + gx;
-      this.cap[c] = (this.isSea(x, y) ? capS : capL) * Math.max(0, Math.min(1, patch * 1.4 - 0.15));
+      this.cap[c] = (this.isSea(x, y) ? capS : this.inRiver(x, y) ? capF : capL) * Math.max(0, Math.min(1, patch * 1.4 - 0.15));
       this.food[c] = this.cap[c] * (0.5 + 0.4 * this.rng());
     }
     // the animals of this zone, as individuals in proportion to their numbers
@@ -105,10 +109,13 @@ export class Microcosm {
 
   coastX(y) { return MW * this.seaFrac + 40 * Math.sin(y / 90) + 22 * Math.sin(y / 37 + 1.3); }
   isSea(x, y) { return x < this.coastX(y); }
+  riverY(x) { const r = this.river; return r.y0 + 55 * Math.sin(x / 110 + r.ph) + 25 * Math.sin(x / 41 + 2 * r.ph); }
+  inRiver(x, y) { return !!this.river && !this.isSea(x, y) && Math.abs(y - this.riverY(x)) < this.river.w / 2; }
   allowed(h, x, y) {
     if (x < 0 || y < 0 || x > MW || y > MH) return false;
     if (h === 0) return this.isSea(x, y);
     if (h === 2) return !this.isSea(x, y);
+    if (h === 3) return this.inRiver(x, y);
     return Math.abs(x - this.coastX(y)) < 170;
   }
   randomPos(h) {

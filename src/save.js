@@ -7,8 +7,9 @@
 
 import { World } from './world.js';
 import { Civilization } from './civ.js';
+import { NG, makeGenes, ARCHETYPES } from './genome.js';
 
-export const SAVE_VERSION = 2; // 2: species carry genomes
+export const SAVE_VERSION = 3; // 2: species carry genomes; 3: coverings, armour, plant forms, fresh water
 
 // ---------- encoding helpers ----------
 
@@ -75,7 +76,7 @@ export function serialize(world, meta = {}) {
       bIdx: packTA(Int32Array.from(idx)), bVal: packTA(Float32Array.from(val)),
       detS: packTA(E.detS), detL: packTA(E.detL),
       specLog: E.specLog, radiationNoted: E.radiationNoted,
-      groupOrigins: E.groupOrigins, groupsSeen: [...(E.groupsSeen || [])],
+      groupOrigins: E.groupOrigins, groupsSeen: [...(E.groupsSeen || [])], groupFrom: E.groupFrom || {},
     },
   };
 }
@@ -84,7 +85,7 @@ export function serialize(world, meta = {}) {
 
 export function deserialize(data) {
   if (data?.version === 1) throw new Error('This world was saved before genomes existed. Open it in StrangeLife Classic.');
-  if (!data || data.version !== SAVE_VERSION) throw new Error('This save file is from a different version of StrangeLife.');
+  if (!data || (data.version !== SAVE_VERSION && data.version !== 2)) throw new Error('This save file is from a different version of StrangeLife.');
   // rebuild the same planet from its seed, then overwrite everything that has changed since
   const w = new World(data.seed, { scenario: data.scenario });
   const P = w.planet, T = w.tect, E = w.eco;
@@ -109,11 +110,18 @@ export function deserialize(data) {
 
   // ecosystem: species, then where they live
   const e = data.eco;
-  const { species, alive, innovations, bIdx, bVal, detS, detL, specLog, radiationNoted, groupOrigins, groupsSeen, ...eScalars } = e;
+  const { species, alive, innovations, bIdx, bVal, detS, detL, specLog, radiationNoted, groupOrigins, groupsSeen, groupFrom, ...eScalars } = e;
   Object.assign(E, eScalars);
   E.species = new Map();
   E.slots.fill(null);
   for (const sp of species) {
+    if (sp.genes.length < NG) {
+      // a save from before coverings and plant forms: fill in the new genes from the group's archetype
+      const base = makeGenes(ARCHETYPES[sp.grade]?.genes || {});
+      const g = Float32Array.from(base);
+      g.set(sp.genes.slice(0, NG));
+      sp.genes = g;
+    }
     sp.genes = Float32Array.from(sp.genes);
     if (sp.brain) sp.brain = Float32Array.from(sp.brain);
     E.species.set(sp.id, sp);
@@ -131,6 +139,7 @@ export function deserialize(data) {
   E.radiationNoted = radiationNoted || {};
   E.groupOrigins = groupOrigins || {};
   E.groupsSeen = new Set(groupsSeen || []);
+  E.groupFrom = groupFrom || {};
   E.B.fill(0);
   E.presN.fill(0);
   const I = unpackTA(bIdx), V = unpackTA(bVal);

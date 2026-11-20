@@ -2,6 +2,8 @@
 
 Where StrangeLife could go next. ⭐ marks the ones to do first. For how the current simulation works, see [ROADMAP.md](ROADMAP.md).
 
+**Current focus: Earth's diversity.** First make the planet reproduce the variety of life we actually see on Earth (Part 3). Other worlds and alien biochemistries wait until then (see *Later*).
+
 ## Part 1: game ideas
 
 ### Civilization
@@ -24,11 +26,6 @@ Where StrangeLife could go next. ⭐ marks the ones to do first. For how the cur
 - **Volcanic mass extinctions.** Huge eruptions (the Siberian Traps, 252 million years ago) as a natural event and a tool.
 - **Disease outbreaks.** Epidemics that spread through dense populations.
 - **Behaviour.** Sociality, migration and parental care evolving as traits.
-
-### Other worlds
-- **Different planets.** Size, gravity, star type (a dimmer red dwarf, a hotter star), ocean coverage, or a planet tidally locked to its star.
-- **Moons and impacts.** A big moon that steadies the planet's tilt; an impact-history mode.
-- **Life from space.** Life arriving by meteorite (panspermia) as an alternative origin.
 
 ### Presentation
 - **Time-lapse recording.** Watch continents drift and life spread, saved as a video or animated image.
@@ -74,10 +71,6 @@ SimEarth (1990) gave life a fixed menu: about 15 predefined groups, each moving 
 - **Feeding links instead of food pools.** Each species eats specific others, decided by size, defences and habitat, so you can watch keystone species, trophic cascades (wolves → deer → forests) and invasive species when continents collide.
 - **Nutrient cycles** (nitrogen, phosphorus), the ocean's biological pump, and life regulating its own planet (Daisyworld-style Gaia feedbacks).
 
-### F. Strange biochemistries
-- **Alternative chemistry per planet.** Different photosynthetic pigments (a purple or black-plant world), sulfur- or iron-based metabolisms, life in ammonia or methane seas on cold worlds, life under ice shells (Europa).
-- The origin-of-life phase picks the chemistry from the planet's conditions, and everything downstream follows from it.
-
 ### G. The planet as a laboratory
 - **Replaying the tape of life.** Rerun the same planet with different luck and compare what repeats, answering Stephen Jay Gould's question with data.
 - **Convergence detector.** Flags when unrelated lineages evolve the same solution (eyes, flight, crab-like bodies).
@@ -89,4 +82,45 @@ SimEarth (1990) gave life a fixed menu: about 15 predefined groups, each moving 
 2. ✅ **D: zoom to individuals in one zone.** Where behaviour and the "wow" moments live.
 3. **E: explicit food webs.** Deeper ecology, built on the genome traits from step 1.
 4. **G: laboratory tools.** Cheap to add once 1–3 exist, and they turn the game into real science.
-5. **C and F** layered in as the systems mature.
+5. **C** layered in as the systems mature; F (strange biochemistries) waits for *Later*.
+
+## Part 3: Earth's diversity (current focus)
+
+Ordered by how much Earth-like variety each adds for the effort.
+
+1. ✅ **Earth's familiar groups.** (Built.) Give the genome what Earth's groups need to be told apart:
+   - **Coverings:** a gene for skin, scales, feathers or fur. Then bats aren't birds, and turtles, dinosaurs and pterosaurs become possible.
+   - **Animal body plans:** snakes (lost limbs), starfish (radial again), spiders, centipedes, and orders within mammals and reptiles (rodents, hoofed animals, carnivores, primates, crocodiles).
+   - **Plant forms:** grasses, cacti and succulents, vines and epiphytes, water plants.
+   - **Fungi and plankton:** lichens; diatoms and forams.
+2. ✅ **Fresh water.** (Built.) Rivers and lakes from rain draining over the terrain. On Earth, fresh water holds about 10% of species in about 1% of the area: lake fish radiations like cichlids, insect larvae, amphibians.
+3. **Food webs, parasites and partners.**
+   - **Food webs:** each species eats specific others, by size and defences, giving keystone species and trophic cascades.
+   - **Parasites:** perhaps half of all species, each often tied to one host.
+   - **Partnerships:** coral and algae, gut microbes, cleaner fish.
+4. **Arms races and life histories.**
+   - **Plant defences:** plant toxins versus specialist herbivores (why there are so many beetles), and grasses evolving alongside grazers.
+   - **Fire:** shaping savannas.
+   - **Life histories:** many small offspring or few big ones, parental care, metamorphosis (larva and adult living different lives), social insects.
+5. **Earth's geographic patterns.**
+   - **Seasons and axial tilt:** migration and hibernation.
+   - **Ocean currents and upwelling:** rich coasts and coral hotspots.
+   - **Rain shadows:** behind mountain ranges.
+   - **A "realms" map view:** zones grouped by shared species, showing continents with their own faunas (marsupials in Australia, Wallace's Line).
+6. **Checking it against Earth.** Diversity through time (the fossil-record curve), the tropics-to-poles gradient, the species–area relationship, body-size distributions.
+7. **Realistic species numbers.** Estimate how many species each simulated lineage holds (from range, habitat variety and body size) for Earth-scale totals, and raise the lineage limit with a faster engine on a background thread.
+8. **More behaviour up close.** Mating displays, warning colours and mimicry, camouflage, and behaviour evolving in zones you aren't watching.
+
+## Later: other worlds and alien life
+
+Parked until Earth's diversity is in place.
+
+### Other worlds
+- **Different planets.** Size, gravity, star type (a dimmer red dwarf, a hotter star), ocean coverage, or a planet tidally locked to its star.
+- **Moons and impacts.** A big moon that steadies the planet's tilt; an impact-history mode.
+- **Life from space.** Life arriving by meteorite (panspermia) as an alternative origin.
+
+### Strange biochemistries
+- **Alternative chemistry per planet.** Different photosynthetic pigments (a purple or black-plant world), sulfur- or iron-based metabolisms, life in ammonia or methane seas on cold worlds, life under ice shells (Europa).
+- The origin-of-life phase picks the chemistry from the planet's conditions, and everything downstream follows from it.
+

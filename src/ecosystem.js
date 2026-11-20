@@ -21,20 +21,21 @@ import { makeGeodesicGrid } from './planet.js';
 import { gaussian } from './rng.js';
 import { genusName, speciesEpithet } from './names.js';
 import { probe } from './brain.js';
-import { GI, ARCHETYPES, develop, classify, ecology, mutate, innovate, evolvable, makeGenes, setDiet, storyKeysFor, describe } from './genome.js';
+import { FAMILY, GI, ARCHETYPES, develop, classify, ecology, mutate, innovate, evolvable, makeGenes, setDiet, storyKeysFor, describe } from './genome.js';
 
 export const ZONE_LEVEL = 4;
 const MAXT = 160;            // species slots
 const SOFT_CAP = 80;         // speciation slows above this many living species
 const SPEC_CAP = MAXT - 25;  // ordinary speciation stops here, keeping slots free for major transitions
 const EXTINCT = 1e-5;
-const LAND_TARGET = [0.04, 0.42, 0.82]; // drought resistance favoured at sea, on shores, on land
-const LAND_GROUPS = new Set(['insect', 'amphibian', 'reptile', 'mammal', 'bird', 'whale', 'sapient']);
+const LAND_TARGET = [0.04, 0.42, 0.82, 0.1]; // drought resistance favoured at sea, on shores, on land, in fresh water
+const LAND_GROUPS = new Set(['insect', 'arachnid', 'myriapod', 'amphibian', 'reptile', 'snake', 'turtle', 'crocodile', 'dinosaur', 'pterosaur',
+  'mammal', 'rodent', 'ungulate', 'carnivoran', 'primate', 'bat', 'bird', 'whale', 'sapient']);
 
 // trophic modes
 export const TROPHIC = { CHEMO: 0, PHOTO: 1, DECOMP: 2, GRAZER: 3, PREDATOR: 4, OMNI: 5 };
 export const TROPHIC_NAMES = ['Chemotroph', 'Photosynthesiser', 'Decomposer', 'Grazer', 'Predator', 'Omnivore'];
-export const HABITAT_NAMES = ['Marine', 'Coastal', 'Land'];
+export const HABITAT_NAMES = ['Marine', 'Coastal', 'Land', 'Freshwater'];
 // prey pools that a species' biomass counts toward
 const POOL = { NONE: -1, MICRO: 0, PROD: 1, HERB: 2 };
 
@@ -53,29 +54,49 @@ export const KINGDOM_KEYS = Object.keys(KINGDOMS);
 export const GRADES = {
   bacteria: { kingdom: 'bacteria', name: 'Bacteria', tier: 0, size: '1–5 µm', habitats: [0, 1], trophics: [0, 2], icon: '🦠' },
   archaea: { kingdom: 'archaea', name: 'Archaea', tier: 0, size: '1–5 µm', habitats: [0, 1], trophics: [0, 2], icon: '♨️' },
-  cyano: { kingdom: 'bacteria', name: 'Cyanobacteria', tier: 0, size: '1–10 µm', habitats: [0, 1], trophics: [1], icon: '🟢' },
+  cyano: { kingdom: 'bacteria', name: 'Cyanobacteria', tier: 0, size: '1–10 µm', habitats: [0, 1, 3], trophics: [1], icon: '🟢' },
   protist: { kingdom: 'protist', name: 'Protists', tier: 1, size: '10–100 µm', habitats: [0, 1], trophics: [3, 4], icon: '🧫' },
-  algae: { kingdom: 'plant', name: 'Algae', tier: 1, size: '10 µm–1 mm', habitats: [0, 1], trophics: [1], icon: '🍃' },
-  seaweed: { kingdom: 'plant', name: 'Seaweeds', tier: 2, size: 'cm–30 m', habitats: [0, 1], trophics: [1], icon: '🌿' },
+  algae: { kingdom: 'plant', name: 'Algae', tier: 1, size: '10 µm–1 mm', habitats: [0, 1, 3], trophics: [1], icon: '🍃' },
+  diatom: { kingdom: 'plant', name: 'Diatoms', tier: 1, size: '2–500 µm', habitats: [0, 3], trophics: [1], icon: '💠' },
+  foram: { kingdom: 'protist', name: 'Forams & radiolarians', tier: 1, size: '0.1–20 mm', habitats: [0], trophics: [4, 3], icon: '🌀' },
+  seaweed: { kingdom: 'plant', name: 'Seaweeds & water algae', tier: 2, size: 'cm–30 m', habitats: [0, 1, 3], trophics: [1], icon: '🌿' },
+  waterplant: { kingdom: 'plant', name: 'Water plants & seagrasses', tier: 4, size: 'cm–3 m', habitats: [3, 0], trophics: [1], icon: '🪷' },
   moss: { kingdom: 'plant', name: 'Mosses', tier: 3, size: 'mm–cm', habitats: [1, 2], trophics: [1], icon: '🌱' },
   fern: { kingdom: 'plant', name: 'Ferns & horsetails', tier: 4, size: 'cm–20 m', habitats: [2], trophics: [1], icon: '🌴' },
   conifer: { kingdom: 'plant', name: 'Conifers', tier: 5, size: '1–100 m', habitats: [2], trophics: [1], icon: '🌲' },
   flower: { kingdom: 'plant', name: 'Flowering plants', tier: 6, size: 'mm–100 m', habitats: [2, 1], trophics: [1], icon: '🌸' },
+  grass: { kingdom: 'plant', name: 'Grasses', tier: 6, size: 'cm–30 m', habitats: [2, 1], trophics: [1], icon: '🌾' },
+  cactus: { kingdom: 'plant', name: 'Cacti & succulents', tier: 6, size: 'cm–20 m', habitats: [2], trophics: [1], icon: '🌵' },
+  vine: { kingdom: 'plant', name: 'Vines & epiphytes', tier: 6, size: 'cm–100 m', habitats: [2], trophics: [1], icon: '🪴' },
   fungi: { kingdom: 'fungus', name: 'Molds & yeasts', tier: 2, size: 'µm–cm', habitats: [0, 1], trophics: [2], icon: '🍄' },
   mushroom: { kingdom: 'fungus', name: 'Mushrooms & mycorrhizae', tier: 3, size: 'cm–km', habitats: [2], trophics: [2], icon: '🍄' },
+  lichen: { kingdom: 'fungus', name: 'Lichens', tier: 3, size: 'mm–m', habitats: [2], trophics: [1], icon: '🪨' },
   sponge: { kingdom: 'animal', name: 'Sponges & corals', tier: 2, size: 'mm–m', habitats: [0], trophics: [3, 4], icon: '🪸' },
   jelly: { kingdom: 'animal', name: 'Jellies & comb jellies', tier: 2, size: 'mm–2 m', habitats: [0], trophics: [4, 3], icon: '🪼' },
+  starfish: { kingdom: 'animal', name: 'Starfish & sea urchins', tier: 3, size: 'cm–1 m', habitats: [0], trophics: [4, 3], icon: '⭐' },
   worm: { kingdom: 'animal', name: 'Worms', tier: 3, size: 'mm–3 m', habitats: [0, 1, 2], trophics: [3, 4, 5], icon: '🪱' },
   mollusc: { kingdom: 'animal', name: 'Shelled molluscs', tier: 3, size: 'mm–1 m', habitats: [0, 1, 2], trophics: [3, 4, 5], icon: '🐚' },
   squid: { kingdom: 'animal', name: 'Squid & octopuses', tier: 4, size: 'cm–15 m', habitats: [0], trophics: [4, 5], icon: '🦑' },
-  arthropod: { kingdom: 'animal', name: 'Sea arthropods', tier: 3, size: 'mm–1 m', habitats: [0, 1], trophics: [3, 4, 5], icon: '🦐' },
-  insect: { kingdom: 'animal', name: 'Insects & spiders', tier: 3, size: 'mm–70 cm', habitats: [2, 1], trophics: [3, 4, 5], icon: '🐞' },
-  fish: { kingdom: 'animal', name: 'Fish', tier: 4, size: 'cm–15 m', habitats: [0, 1], trophics: [3, 4, 5], icon: '🐟' },
-  amphibian: { kingdom: 'animal', name: 'Amphibians', tier: 4, size: 'cm–5 m', habitats: [1, 2], trophics: [4, 5], icon: '🐸' },
-  reptile: { kingdom: 'animal', name: 'Reptiles', tier: 5, size: 'cm–40 m', habitats: [2, 1], trophics: [3, 4, 5], icon: '🦎' },
-  mammal: { kingdom: 'animal', name: 'Mammals', tier: 5, size: 'cm–6 m', habitats: [2, 1], trophics: [3, 4, 5], icon: '🦌' },
+  arthropod: { kingdom: 'animal', name: 'Crustaceans & sea arthropods', tier: 3, size: 'mm–1 m', habitats: [0, 1, 3], trophics: [3, 4, 5], icon: '🦐' },
+  insect: { kingdom: 'animal', name: 'Insects', tier: 3, size: 'mm–70 cm', habitats: [2, 1], trophics: [3, 4, 5], icon: '🐞' },
+  arachnid: { kingdom: 'animal', name: 'Spiders & scorpions', tier: 3, size: 'mm–30 cm', habitats: [2, 1], trophics: [4, 5], icon: '🕷️' },
+  myriapod: { kingdom: 'animal', name: 'Centipedes & millipedes', tier: 3, size: 'mm–2 m', habitats: [2, 1], trophics: [3, 4], icon: '🐛' },
+  fish: { kingdom: 'animal', name: 'Fish', tier: 4, size: 'cm–15 m', habitats: [0, 3, 1], trophics: [3, 4, 5], icon: '🐟' },
+  amphibian: { kingdom: 'animal', name: 'Amphibians', tier: 4, size: 'cm–5 m', habitats: [1, 3, 2], trophics: [4, 5], icon: '🐸' },
+  reptile: { kingdom: 'animal', name: 'Lizards & other reptiles', tier: 5, size: 'cm–3 m', habitats: [2, 1], trophics: [3, 4, 5], icon: '🦎' },
+  snake: { kingdom: 'animal', name: 'Snakes', tier: 5, size: 'cm–10 m', habitats: [2, 1], trophics: [4], icon: '🐍' },
+  turtle: { kingdom: 'animal', name: 'Turtles & tortoises', tier: 5, size: 'cm–4 m', habitats: [2, 1, 3], trophics: [3, 5], icon: '🐢' },
+  crocodile: { kingdom: 'animal', name: 'Crocodiles', tier: 5, size: '1–12 m', habitats: [1, 3], trophics: [4], icon: '🐊' },
+  dinosaur: { kingdom: 'animal', name: 'Dinosaurs', tier: 5, size: '1–40 m', habitats: [2, 1], trophics: [3, 4, 5], icon: '🦕' },
+  pterosaur: { kingdom: 'animal', name: 'Pterosaurs', tier: 5, size: '0.3–11 m', habitats: [2, 1], trophics: [4, 5], icon: '🐉' },
   bird: { kingdom: 'animal', name: 'Birds', tier: 5, size: 'cm–3 m', habitats: [2, 1], trophics: [3, 4, 5], icon: '🐦' },
-  whale: { kingdom: 'animal', name: 'Marine mammals', tier: 5, size: '1–30 m', habitats: [0], trophics: [4, 3], icon: '🐋' },
+  mammal: { kingdom: 'animal', name: 'Mammals (small insect-eaters and kin)', tier: 5, size: 'cm–2 m', habitats: [2, 1], trophics: [5, 3, 4], icon: '🦔' },
+  rodent: { kingdom: 'animal', name: 'Rodents & rabbits', tier: 5, size: 'cm–1 m', habitats: [2, 1], trophics: [3, 5], icon: '🐭' },
+  ungulate: { kingdom: 'animal', name: 'Hoofed mammals', tier: 5, size: '0.5–6 m', habitats: [2, 1], trophics: [3], icon: '🦌' },
+  carnivoran: { kingdom: 'animal', name: 'Carnivores', tier: 5, size: 'cm–3 m', habitats: [2, 1], trophics: [4, 5], icon: '🐺' },
+  primate: { kingdom: 'animal', name: 'Primates', tier: 5, size: 'cm–2 m', habitats: [2], trophics: [5, 3], icon: '🐒' },
+  bat: { kingdom: 'animal', name: 'Bats', tier: 5, size: 'cm–1.7 m', habitats: [2, 1], trophics: [4, 3, 5], icon: '🦇' },
+  whale: { kingdom: 'animal', name: 'Whales, seals & river dolphins', tier: 5, size: '1–30 m', habitats: [0, 3], trophics: [4, 3], icon: '🐋' },
   sapient: { kingdom: 'animal', name: 'Intelligent life', tier: 6, size: '1–2 m', habitats: [2, 1], trophics: [5], icon: '🧠' },
 };
 export const GRADE_KEYS = Object.keys(GRADES);
@@ -89,7 +110,7 @@ export function nicheTol(grade) {
   if (G.kingdom === 'plant') return { n2: 0.22, alt: 0.25 };
   if (G.kingdom === 'fungus') return { n2: 0.35, alt: 0.4 };
   if (G.kingdom === 'protist') return { n2: 0.45, alt: 0.5 };
-  if (grade === 'mammal' || grade === 'bird' || grade === 'whale') return { n2: 0.45, alt: 0.5 };
+  if (FAMILY[grade] === 'mammals' || grade === 'bird' || grade === 'whale') return { n2: 0.45, alt: 0.5 };
   return { n2: 0.38, alt: 0.4 };
 }
 
@@ -108,7 +129,8 @@ const capOf = (grade) => GRADE_CAP[grade] ?? GROUP_CAP[GRADES[grade].kingdom];
 
 // how strongly mate choice drives speciation (birds and fish are famous for it)
 // (scaled by each species' display gene: showy colours, songs and dances)
-const SEXUAL_SELECTION = { bird: 2, fish: 1.5, insect: 1, mammal: 0.8, reptile: 0.8, amphibian: 0.8, arthropod: 0.6, squid: 0.6, mollusc: 0.3, worm: 0.3 };
+const SEXUAL_SELECTION = { bird: 2, fish: 1.5, insect: 1, mammal: 0.8, reptile: 0.8, amphibian: 0.8, arthropod: 0.6, squid: 0.6, mollusc: 0.3, worm: 0.3,
+  dinosaur: 0.8, pterosaur: 0.8, ungulate: 0.8, primate: 0.8, rodent: 0.6, carnivoran: 0.6, bat: 0.6, arachnid: 0.6, snake: 0.4, crocodile: 0.4, turtle: 0.3 };
 
 // icon variants within a grade (by diet and size)
 function pickIcon(g, trophic, size, habitat = 0) {
@@ -118,11 +140,18 @@ function pickIcon(g, trophic, size, habitat = 0) {
   if (g === 'jelly') return '🪼';
   if (g === 'fish') return trophic === TROPHIC.PREDATOR ? '🦈' : '🐟';
   if (g === 'arthropod') return trophic === TROPHIC.PREDATOR ? '🦀' : '🦐';
-  if (g === 'insect') return trophic === TROPHIC.PREDATOR ? '🕷️' : '🐞';
-  if (g === 'reptile') return size > 0.65 ? (trophic === TROPHIC.PREDATOR ? '🦖' : '🦕') : trophic === TROPHIC.PREDATOR ? '🐊' : '🦎';
-  if (g === 'mammal') return trophic === TROPHIC.PREDATOR ? '🐺' : trophic === TROPHIC.OMNI ? (size < 0.3 ? '🐭' : '🐻') : size > 0.7 ? '🐘' : '🦌';
+  if (g === 'insect') return trophic === TROPHIC.PREDATOR ? '🐝' : size > 0.15 ? '🦋' : '🐞';
+  if (g === 'reptile') return '🦎';
+  if (g === 'mammal') return size > 0.5 ? '🐻' : '🦔';
+  if (g === 'ungulate') return size > 0.75 ? '🐘' : size > 0.6 ? '🦬' : '🦌';
+  if (g === 'carnivoran') return size > 0.55 ? '🐻' : size > 0.35 ? '🐺' : '🦊';
+  if (g === 'rodent') return size > 0.2 ? '🐇' : '🐭';
+  if (g === 'primate') return size > 0.5 ? '🦍' : '🐒';
+  if (g === 'dinosaur') return trophic === TROPHIC.PREDATOR ? '🦖' : '🦕';
+  if (g === 'turtle') return '🐢';
+  if (g === 'arachnid') return size > 0.2 ? '🦂' : '🕷️';
   if (g === 'bird') return trophic === TROPHIC.PREDATOR ? '🦅' : '🐦';
-  if (g === 'whale') return trophic === TROPHIC.PREDATOR ? '🐬' : '🐋';
+  if (g === 'whale') return habitat === 3 || trophic === TROPHIC.PREDATOR ? '🐬' : '🐋';
   if (g === 'flower') return size > 0.6 ? '🌳' : '🌸';
   if (g === 'protist' && trophic === TROPHIC.PREDATOR) return '🧫';
   if (g === 'bacteria' && trophic === TROPHIC.DECOMP) return '🦠';
@@ -138,6 +167,9 @@ export const TRANSITIONS = [
   // endosymbiosis: an archaeal host engulfs a bacterium that becomes its mitochondrion
   { from: 'archaea', to: 'protist', p: 0.003, key: 'eukaryote', need: (E, z) => E.planet.o2 >= 0.4 && E.kingdomIn(z, 'bacteria'),
     make: () => ({ domain: 'eukaryote', mito: true, genes: { adhesion: 0.15, ingest: 0.75, carnivory: 0.3, motility: 0.6, size: 0.5 } }) },
+  // a fungus that farms algae or cyanobacteria inside itself: a lichen, the first life on bare rock
+  { from: 'mushroom', to: 'lichen', p: 0.002, key: 'lichen', hab: 2, need: (E, z) => E.zLand[z] > 0.1 && (E.gradeIn(z, 'algae') || E.gradeIn(z, 'cyano')),
+    make: () => ({ lichen: true, chloro: true, genes: { photo: 0.85, absorb: 0.7, landAdapt: 0.85, size: 0.1 } }) },
   // a protist engulfs a cyanobacterium: the chloroplast
   { from: 'protist', to: 'algae', p: 0.003, key: 'algae', need: (E, z) => E.gradeIn(z, 'cyano'),
     make: () => ({ chloro: true, genes: { photo: 0.85, ingest: 0.15, absorb: 0.1 } }) },
@@ -170,6 +202,7 @@ export class Ecosystem {
     this.wHerb = new Float32Array(MAXT); this.wDet = new Float32Array(MAXT);
     this.tKing = new Int8Array(MAXT);
     this.tDry = new Float32Array(MAXT); this.tVuln = new Float32Array(MAXT).fill(1);
+    this.tSucc = new Float32Array(MAXT); this.tClimb = new Float32Array(MAXT); this.tRock = new Uint8Array(MAXT);
     this.groupOrigins = {}; // kind of life -> number of independent origins
     this.tHost = new Int16Array(MAXT).fill(-1);
     this.tDraw = new Float32Array(MAXT).fill(1); // share of food taken from the wild (farming lowers it) // specialist herbivores: slot of their host plant
@@ -205,6 +238,8 @@ export class Ecosystem {
     this.zOrg = new Float32Array(Z); this.orgFactor = new Float32Array(Z);
     // niche axes: rainfall and altitude of the land part, depth of the sea part (all 0..1)
     this.zMl = new Float32Array(Z); this.zHl = new Float32Array(Z); this.zDs = new Float32Array(Z);
+    // fresh water: the share of a zone covered by rivers and lakes, and its plant capacity
+    this.zFw = new Float32Array(Z); this.zKf = new Float32Array(Z);
     this.detS = new Float32Array(Z); this.detL = new Float32Array(Z);
     this.coverS = new Float32Array(Z); this.coverL = new Float32Array(Z);
     this.suit = new Float32Array(Z * MAXT);
@@ -221,7 +256,8 @@ export class Ecosystem {
     const P = this.planet, Z = this.Z, zoneOf = this.zoneOf;
     const sea = new Float32Array(Z), land = new Float32Array(Z), ts = new Float32Array(Z), tl = new Float32Array(Z);
     const ks = new Float32Array(Z), kl = new Float32Array(Z), org = new Float32Array(Z), tAll = new Float32Array(Z);
-    const ml = new Float32Array(Z), hl = new Float32Array(Z), ds = new Float32Array(Z);
+    const ml = new Float32Array(Z), hl = new Float32Array(Z), ds = new Float32Array(Z), fw = new Float32Array(Z), kf = new Float32Array(Z);
+    const fresh = P.fresh;
     const depthScale = 1 / Math.max(0.3, 1 + P.seaLevel);
     for (let c = 0; c < P.n; c++) {
       const z = zoneOf[c], T = P.temp[c], b = P.biome[c];
@@ -233,6 +269,8 @@ export class Ecosystem {
       } else if (b !== 3) {
         land[z]++; tl[z] += T; kl[z] += P.K[c] * P.light[c];
         ml[z] += P.moist[c]; hl[z] += P.heightAboveSea(c);
+        // rivers and lakes gather nutrients from their whole catchment, so they are rich for their size
+        if (fresh && fresh[c] > 0 && b !== 3) { fw[z] += fresh[c]; kf[z] += fresh[c] * 3 * P.light[c] * (T > 0 ? 1 : 0.2); }
       }
     }
     for (let z = 0; z < Z; z++) {
@@ -247,6 +285,8 @@ export class Ecosystem {
       this.zMl[z] = land[z] ? ml[z] / land[z] : 0.5;
       this.zHl[z] = land[z] ? hl[z] / land[z] : 0;
       this.zDs[z] = sea[z] ? ds[z] / sea[z] : 0.3;
+      this.zFw[z] = fw[z] / n;
+      this.zKf[z] = kf[z] / n;
     }
     // refresh a rotating share of species each call; climate changes slowly
     const nA = this.alive.length;
@@ -256,9 +296,9 @@ export class Ecosystem {
   // the local values of a species' niche axes in a zone
   localNiche(h, z) {
     return {
-      T: h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]),
-      n2: h === 0 ? this.zDs[z] : this.zMl[z], // depth at sea, rainfall on land and coasts
-      alt: h === 2 ? this.zHl[z] : 0,
+      T: h === 0 ? this.zTs[z] : h >= 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]),
+      n2: h === 0 ? this.zDs[z] : this.zMl[z], // depth at sea, rainfall on land, coasts and rivers
+      alt: h >= 2 ? this.zHl[z] : 0,
     };
   }
 
@@ -270,10 +310,10 @@ export class Ecosystem {
     const pref = this.tPref[s], tol = this.tTol[s], h = this.tHab[s], suit = this.suit;
     const n2 = sp.n2, n2t = sp.n2tol, alt = sp.alt, altT = sp.altTol;
     for (let z = 0; z < this.Z; z++) {
-      const T = h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]);
+      const T = h === 0 ? this.zTs[z] : h >= 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]);
       const d = (T - pref) / tol;
       const e = ((h === 0 ? this.zDs[z] : this.zMl[z]) - n2) / n2t;
-      const a = h === 2 ? (this.zHl[z] - alt) / altT : 0;
+      const a = h >= 2 ? (this.zHl[z] - alt) / altT : 0;
       // temperature limits survival outright; rainfall/depth and altitude shape how well a
       // species does (a mismatch costs up to 70% of its performance, not its life)
       suit[z * MAXT + s] = Math.exp(-0.5 * d * d) * (0.3 + 0.7 * Math.exp(-0.5 * (e * e + a * a)));
@@ -294,7 +334,7 @@ export class Ecosystem {
     if (!opts.genes) genes[GI.hue] = rng();
     const sp = {
       id: this.nextId++, slot, grade, kingdom: GRADES[grade].kingdom,
-      domain: opts.domain ?? A.domain, mito: opts.mito ?? A.mito, chloro: opts.chloro ?? A.chloro,
+      domain: opts.domain ?? A.domain, mito: opts.mito ?? A.mito, chloro: opts.chloro ?? A.chloro, lichen: opts.lichen ?? parent?.lichen ?? !!A.lichen,
       genes, trophic: 0, habitat: opts.habitat ?? 0, size: 0,
       pref: opts.pref ?? 20, tol: opts.tol ?? 10,
       n2: opts.n2 ?? 0.5, n2tol: opts.n2tol ?? 0.4,
@@ -329,7 +369,7 @@ export class Ecosystem {
     const ph = (sp.ph = develop(sp));
     sp.trophic = ph.trophic;
     sp.size = ph.size;
-    sp.grade = classify(sp, ph, sp.habitat);
+    sp.grade = classify(sp, ph, sp.habitat, sp.grade);
     sp.kingdom = GRADES[sp.grade].kingdom;
     sp.tier = ph.tier;
     sp.body = describe(ph);
@@ -351,6 +391,7 @@ export class Ecosystem {
     this.tM[s] = p.m; this.tE[s] = p.e; this.tImax[s] = p.imax; this.tHalf[s] = p.half;
     this.tO2[s] = p.o2; this.tDisp[s] = p.disp; this.tSelf[s] = p.self * (sp.sexual ? 0.75 : 1);
     this.tDry[s] = p.dry; this.tVuln[s] = p.vuln;
+    this.tSucc[s] = p.succ || 0; this.tClimb[s] = p.climb || 0; this.tRock[s] = p.rock ? 1 : 0;
     // behaviour evolved by individuals (when you dive into a zone): better foragers and hunters
     // eat more, and animals that flee or crowd together are harder to catch
     if (sp.brain && ph.animal) {
@@ -437,7 +478,7 @@ export class Ecosystem {
   }
 
   habitatOk(h, z) {
-    return h === 0 ? this.zSea[z] > 0.05 : h === 2 ? this.zLand[z] > 0.05 : this.zSea[z] > 0.02 && this.zLand[z] > 0.02;
+    return h === 0 ? this.zSea[z] > 0.05 : h === 2 ? this.zLand[z] > 0.05 : h === 3 ? this.zFw[z] > 0.01 : this.zSea[z] > 0.02 && this.zLand[z] > 0.02;
   }
 
   seed(grade, z, opts = {}) {
@@ -517,7 +558,7 @@ export class Ecosystem {
     this.years = years;
     const P = this.planet, B = this.B, Z = this.Z, alive = this.alive;
     const o2 = P.o2, ozone = P.ozone;
-    const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing, tHost, tDry, tVuln } = this;
+    const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing, tHost, tDry, tVuln, tSucc, tClimb, tRock } = this;
     // which species build reefs (1) or forests (2)
     const engineer = this._eng || (this._eng = new Uint8Array(MAXT));
     for (const s of alive) {
@@ -529,7 +570,7 @@ export class Ecosystem {
     total.fill(0); range.fill(0); sumT.fill(0); sumN2.fill(0); sumA.fill(0);
     const nA = alive.length;
     const fungK = KINGDOM_KEYS.indexOf('fungus');
-    const pollinators = this.gradeAlive('insect') || this.gradeAlive('bird');
+    const pollinators = this.gradeAlive('insect') || this.gradeAlive('bird') || this.gradeAlive('bat');
     // plants with their own specialist insects get dedicated pollinators
     const pollinated = this.pollinated || (this.pollinated = new Uint8Array(MAXT));
     pollinated.fill(0);
@@ -558,7 +599,7 @@ export class Ecosystem {
         any = true;
         const h = tHab[s], hs = h === 0 ? 1 : h === 1 ? 0.5 : 0, hl = 1 - hs;
         const p = tPool[s];
-        if (p === 0) { microS += b * hs; microL += b * hl; }
+        if (p === 0) { const v = b * tVuln[s]; microS += v * hs; microL += v * hl; }
         else if (p === 1) { prodS += b * hs; prodL += b * hl; }
         else if (p === 2) { const v = b * tVuln[s]; herbS += v * hs; herbL += v * hl; }
         if (tTroph[s] === 2) { decS += b * hs; decL += b * hl; if (tKing[s] === fungK) fungL += b * hl; }
@@ -588,20 +629,24 @@ export class Ecosystem {
         const o2f = tO2[s] > 0 ? Math.min(1, o2 / tO2[s]) : 1;
         let mort = tM[s] + 0.05 * (1 - suit) + 0.08 * (1 - o2f) + 0.1 * hl * (1 - ozone) + tDry[s];
         // habitat shrinking under them (sea level, ice)
-        const room = h === 0 ? zs : h === 2 ? zl : Math.min(1, 4 * Math.min(zs, zl));
+        const room = h === 0 ? zs : h === 2 ? zl : h === 3 ? Math.min(1, 0.2 + 6 * this.zFw[z]) : Math.min(1, 4 * Math.min(zs, zl));
         if (room < 0.03) mort += 0.2;
         if (b < 3e-4) mort += 0.04; // Allee effect: tiny populations struggle to find mates and recover
         if (tKing[s] === archK) mort += archO2;
         let nb;
         if (tTroph[s] === 1) {
-          const K = (hs * KS + hl * KL * (pollinators || this.slots[s].grade !== 'flower' ? 1 : 0.6)) * tK[s] * (this.pollinated[s] ? 1.15 : 1);
+          // land capacity: water-storing plants do well where it's dry, climbers where there are
+          // trees to climb, lichens on bare rock; fresh water has its own
+          let kl = h === 3 ? this.zKf[z] * nutL : KL * (1 + 2 * tSucc[s] * (1 - this.zMl[z])) * (1 + 1.5 * tClimb[s] * struct);
+          if (tRock[s]) kl = Math.max(kl, 0.12 * zl);
+          const K = (hs * KS + hl * kl * (pollinators || this.slots[s].grade !== 'flower' ? 1 : 0.6)) * tK[s] * (this.pollinated[s] ? 1.15 : 1);
           const crowd = hs * prodS + hl * prodL;
           nb = b + tR[s] * b * (suit * o2f - crowd / (K + 1e-6)) - mort * 0.3 * b;
           prodTotal += b;
           if (h > 0) landProd += b * hl;
         } else {
           const own = b;
-          const fMicro = wMicro[s] * Math.max(0, hs * microS + hl * microL - (tPool[s] === 0 ? own : 0));
+          const fMicro = wMicro[s] * Math.max(0, hs * microS + hl * microL - (tPool[s] === 0 ? own * tVuln[s] : 0));
           const hostSlot = tHost[s];
           const fProd = wProd[s] * (hostSlot >= 0 ? B[base + hostSlot] : hs * prodS + hl * prodL);
           const fHerb = wHerb[s] * Math.max(0, hs * herbS + hl * herbL - (tPool[s] === 2 ? own * tVuln[s] : 0));
@@ -637,11 +682,11 @@ export class Ecosystem {
         const p = tPool[s];
         if (p >= 0) {
           const h = tHab[s], hs = h === 0 ? 1 : h === 1 ? 0.5 : 0, hl = 1 - hs;
-          if (p === 2) {
+          if (p === 2 || p === 0) {
             // prey losses fall hardest on the easiest to catch
-            const v = tVuln[s];
-            nb *= hs * Math.max(0, 1 - v * (1 - fhS)) + hl * Math.max(0, 1 - v * (1 - fhL));
-          } else nb *= p === 0 ? hs * fmS + hl * fmL : hs * fpS + hl * fpL;
+            const v = tVuln[s], fS = p === 2 ? fhS : fmS, fL = p === 2 ? fhL : fmL;
+            nb *= hs * Math.max(0, 1 - v * (1 - fS)) + hl * Math.max(0, 1 - v * (1 - fL));
+          } else nb *= hs * fpS + hl * fpL;
           if (p === 1) { pS += nb * hs; pL += nb * hl; }
           if (nb < EXTINCT) nb = 0;
         }
@@ -652,9 +697,9 @@ export class Ecosystem {
           if (nb > 1e-4) kmask |= 1 << tKing[s];
           if (tKing[s] === archK) methane += nb; // archaea include the methanogens
           const h = tHab[s];
-          sumT[s] += nb * (h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]));
+          sumT[s] += nb * (h === 0 ? this.zTs[z] : h >= 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]));
           sumN2[s] += nb * (h === 0 ? this.zDs[z] : this.zMl[z]);
-          if (h === 2) sumA[s] += nb * this.zHl[z];
+          if (h >= 2) sumA[s] += nb * this.zHl[z];
         }
       }
       presN[z] = w;
@@ -743,7 +788,7 @@ export class Ecosystem {
         const k = 0.02 * this.mutationRate;
         sp.pref += (this.sumT[s] / sp.total - sp.pref) * k;
         sp.n2 += (this.sumN2[s] / sp.total - sp.n2) * k;
-        if (sp.habitat === 2) sp.alt += (this.sumA[s] / sp.total - sp.alt) * k;
+        if (sp.habitat >= 2) sp.alt += (this.sumA[s] / sp.total - sp.alt) * k;
         this.tPref[s] = sp.pref;
         if (this.tick % 40 === 0) this.refreshSuit(s);
       }
@@ -806,7 +851,7 @@ export class Ecosystem {
       if (!weight) continue;
       // a group that already exists and is crowded rarely gets a fresh origin
       const nTo = gradeCounts[t.to] || 0, capTo = capOf(t.to);
-      const repeat = this.innovations.has(t.key) ? 0.3 * (nTo > capTo / 2 ? Math.exp(-(nTo - capTo / 2) / 2) : 1) : 1;
+      const repeat = this.innovations.has(t.key) || this.originsOf(t.to) > 0 ? 0.3 * (nTo > capTo / 2 ? Math.exp(-(nTo - capTo / 2) / 2) : 1) : 1;
       if (rng() >= t.p * this.transitionRate * Math.min(4, Math.max(0.6, weight / 25)) * repeat * Math.sqrt(opp)) continue;
       let r = rng() * weight, sp = cands[0][0];
       for (const [c, w] of cands) { r -= w; if (r <= 0) { sp = c; break; } }
@@ -958,7 +1003,7 @@ export class Ecosystem {
       if (this.B[z * MAXT + s] < 1e-4 || !pred(z)) continue;
       found++;
       const h = sp.habitat;
-      const T = h === 0 ? this.zTs[z] : h === 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]);
+      const T = h === 0 ? this.zTs[z] : h >= 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]);
       const score = -Math.abs(T - sp.pref) + this.rng() * 6;
       if (score < bestScore) { bestScore = score; best = z; }
     }
@@ -974,7 +1019,7 @@ export class Ecosystem {
     const sexualSel = mode === 'sexual';
     let habitat = sp.habitat;
     let genes = mutate(sp.genes, rng, gaussian, sexualSel ? 0.3 : this.mutationRate, evolvable(sp, sp.ph));
-    let domain = sp.domain, mito = sp.mito, chloro = sp.chloro;
+    let domain = sp.domain, mito = sp.mito, chloro = sp.chloro, lichen = sp.lichen;
     if (sexualSel) {
       // speciation by mate choice: same niche, a new courtship display and colours
       genes[GI.display] = Math.min(1, genes[GI.display] + 0.1);
@@ -984,19 +1029,24 @@ export class Ecosystem {
       const gene = innovate(genes, sp, sp.ph, rng);
       // a mutant that copes better (or worse) with drying out moves up (or down) the shore
       if (gene === 'landAdapt') {
-        const h = genes[GI.landAdapt] > before ? Math.min(2, sp.habitat + 1) : Math.max(0, sp.habitat - 1);
+        const up = genes[GI.landAdapt] > before, h0 = sp.habitat;
+        const h = up ? (h0 === 3 ? 2 : Math.min(2, h0 + 1)) : h0 === 2 ? (rng() < 0.5 ? 1 : 3) : h0 === 1 ? 0 : h0;
         const z2 = h === sp.habitat ? -1 : this.habitatOk(h, z) ? z : this.pickZone(sp, (q) => this.habitatOk(h, q));
         if (z2 >= 0) { habitat = h; z = z2; }
       }
     } else if (transition) {
       const m = transition.make(sp);
-      domain = m.domain ?? domain; mito = m.mito ?? mito; chloro = m.chloro ?? chloro;
+      domain = m.domain ?? domain; mito = m.mito ?? mito; chloro = m.chloro ?? chloro; lichen = m.lichen ?? lichen;
+      if (transition.hab !== undefined) habitat = transition.hab;
       if (m.genes) for (const k in m.genes) genes[GI[k]] = m.genes[k];
       genes[GI.hue] = rng();
     } else if (rng() < 0.2) {
       // move into the neighbouring habitat: sea ↔ coast ↔ land, founded somewhere in the range
       // that has it (a sea creature colonises the shore from a coastal population)
-      const h = sp.habitat === 1 ? (rng() < 0.5 ? 0 : 2) : 1;
+      // (fresh water connects to the shore through estuaries and to the land through swamps)
+      // a population living beside a river is the likeliest to move into it
+      const r = rng(), river = sp.habitat !== 3 && this.habitatOk(3, z) && rng() < 0.5;
+      const h = river ? 3 : sp.habitat === 0 ? (r < 0.75 ? 1 : 3) : sp.habitat === 1 ? (r < 0.4 ? 0 : r < 0.75 ? 2 : 3) : sp.habitat === 2 ? (r < 0.6 ? 1 : 3) : r < 0.5 ? 1 : 2;
       const z2 = this.habitatOk(h, z) ? z : this.pickZone(sp, (q) => this.habitatOk(h, q));
       if (z2 >= 0) { habitat = h; z = z2; }
     }
@@ -1019,7 +1069,7 @@ export class Ecosystem {
     const tol = Math.max(3, Math.min(30, sp.tol * Math.exp(gaussian(rng) * 0.15)));
     const eukaryote = domain === 'eukaryote';
     const sexual = eukaryote && (sp.sexual || rng() < 0.15);
-    const child = this.createSpecies(grade, { parent: sp.id, genes, domain, mito, chloro, habitat, pref, tol, sexual, n2, alt, years: this.years,
+    const child = this.createSpecies(grade, { parent: sp.id, genes, domain, mito, chloro, lichen, habitat, pref, tol, sexual, n2, alt, years: this.years,
       n2tol: Math.max(0.08, Math.min(1.2, sp.n2tol * Math.exp(gaussian(rng) * 0.15))), altTol: sp.altTol });
     if (!child) return null;
     // a new body plan brings a new climate tolerance with it (warm blood, a brain…)
@@ -1053,10 +1103,18 @@ export class Ecosystem {
   // already evolved elsewhere from a different ancestor, that is convergent evolution.
   establish(sp) {
     sp.estab = true;
+    // the first life to settle in rivers and lakes
+    if (sp.habitat === 3 && !this.innovations.has('freshwater')) {
+      this.innovations.add('freshwater');
+      this.onEvent({ type: 'freshwater', species: sp });
+    }
     const parent = sp.parent ? this.species.get(sp.parent) : null;
     const seen = (this.groupsSeen ||= new Set());
     if (!parent) { seen.add(sp.grade); return; } // life the player (or the scenario) put there
     if (parent.grade === sp.grade) return;
+    // a lineage drifting back into a group its recent ancestors belonged to is a reversal,
+    // not a new origin
+    for (let a = parent, k = 0; a && k < 12; a = a.parent ? this.species.get(a.parent) : null, k++) if (a.grade === sp.grade) return;
     const n = (this.groupOrigins[sp.grade] = (this.groupOrigins[sp.grade] || 0) + 1);
     const keys = storyKeysFor(sp.grade, sp.ph).filter((k, i, a) => a.indexOf(k) === i && !this.innovations.has(k));
     for (const key of keys) {
@@ -1065,8 +1123,12 @@ export class Ecosystem {
     }
     const first = !seen.has(sp.grade);
     seen.add(sp.grade);
+    // convergence worth announcing: the group evolving again from a different kind of ancestor
+    const from = ((this.groupFrom ||= {})[sp.grade] ||= []);
+    const novelSource = !from.includes(parent.grade);
+    if (novelSource) from.push(parent.grade);
     if (first) this.onEvent({ type: 'newgroup', species: sp, parent, grade: sp.grade });
-    else if (!sp.merger && n > 1) this.onEvent({ type: 'convergent', species: sp, parent, grade: sp.grade, count: n });
+    else if (!sp.merger && novelSource) this.onEvent({ type: 'convergent', species: sp, parent, grade: sp.grade, count: n });
   }
 
   // Specialist herbivores: insects (and other land arthropods) may specialise on one plant
@@ -1154,10 +1216,10 @@ export function previewSpecies(grade, opts = {}) {
   genes[GI.hue] = opts.hue ?? 0.5;
   if (opts.trophic !== undefined && G.trophics.includes(opts.trophic)) setDiet(genes, A.domain, opts.trophic);
   if (opts.size !== undefined) genes[GI.size] = Math.max(0.02, Math.min(1, opts.size));
-  const sp = { id: 1, genes, domain: A.domain, mito: A.mito, chloro: A.chloro, habitat: opts.habitat ?? G.habitats[0], landAnc: LAND_GROUPS.has(grade) };
+  const sp = { id: 1, genes, domain: A.domain, mito: A.mito, chloro: A.chloro, lichen: !!A.lichen, habitat: opts.habitat ?? G.habitats[0], landAnc: LAND_GROUPS.has(grade) };
   sp.ph = develop(sp);
   sp.trophic = sp.ph.trophic; sp.size = sp.ph.size;
-  sp.grade = classify(sp, sp.ph, sp.habitat);
+  sp.grade = classify(sp, sp.ph, sp.habitat, grade);
   sp.kingdom = GRADES[sp.grade].kingdom;
   sp.body = describe(sp.ph);
   return sp;

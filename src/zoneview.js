@@ -49,7 +49,7 @@ export class ZoneView {
     for (const [b, n] of cnt) { if (BIOMES[b].water) { if (n > ns) { ns = n; sea = b; } } else if (n > nl) { nl = n; land = b; } }
     this.seaBiome = sea; this.landBiome = land;
     const T = E.zTs[z], Tl = E.zTl[z];
-    $('zone-title').textContent = `${nl && ns ? `${BIOMES[land].name} and ${BIOMES[sea].name.toLowerCase()}` : nl ? BIOMES[land].name : BIOMES[sea].name}`;
+    $('zone-title').textContent = `${nl && ns ? `${BIOMES[land].name} and ${BIOMES[sea].name.toLowerCase()}` : nl ? BIOMES[land].name : BIOMES[sea].name}${this.m.river ? ', with a river' : ''}`;
     $('zone-sub').textContent = `${Math.round(ns ? T : Tl)}°C · ${this.m.groups.length ? `${this.m.groups.length} kinds of animal, ${this.m.agents.length} individuals` : 'no animals live here yet'}`;
     $('zoneview').hidden = false;
     document.body.classList.add('zone-open');
@@ -131,7 +131,7 @@ export class ZoneView {
       if (f < 0.04) continue;
       const gx = c % GW, gy = Math.floor(c / GW);
       const x = (gx + 0.5) * CELL, y = (gy + 0.5) * CELL;
-      const list = m.isSea(x, y) ? m.producers.sea : m.producers.land;
+      const list = m.isSea(x, y) ? m.producers.sea : m.inRiver(x, y) ? m.producers.fresh : m.producers.land;
       if (!list.length) continue;
       const sp = list[(gx * 7 + gy * 13) % list.length];
       const s = 10 + 22 * Math.min(1, f);
@@ -152,6 +152,16 @@ export class ZoneView {
     // land and sea
     const land = BIOMES[this.landBiome].color, sea = BIOMES[this.seaBiome].color;
     ctx.fillStyle = rgb(land, 0.85); ctx.fillRect(0, 0, MW, MH);
+    if (m.river) {
+      // the river runs across the land into the sea
+      const w = m.river.w / 2;
+      ctx.beginPath();
+      for (let x = 0; x <= MW; x += 10) ctx.lineTo(x, m.riverY(x) - w);
+      for (let x = MW; x >= 0; x -= 10) ctx.lineTo(x, m.riverY(x) + w);
+      ctx.closePath();
+      ctx.fillStyle = 'rgb(46,104,150)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2; ctx.stroke();
+    }
     if (m.seaFrac > 0) {
       ctx.beginPath(); ctx.moveTo(0, 0);
       for (let y = 0; y <= MH; y += 8) ctx.lineTo(m.coastX(y), y);

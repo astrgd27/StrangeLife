@@ -95,12 +95,22 @@ Each zone holds the biomass of every species living there:
 - **Sexual selection.** In birds, fish and other showy animals, mate choice alone can split a population into new species.
 - **Geographic isolation (allopatric speciation).** When part of a species' range is cut off by an opening sea, a rising mountain range or a band of hostile climate, and stays cut off, it becomes a new species adapted to its own patch. Drifting continents keep making new barriers.
 - **Speciation at range edges.** Stressed populations at the edge of a range also split off as new species with a new temperature niche, diet, habitat or body size. Sexual species split faster. Speciation slows as a niche fills (diversity-dependent diversification), and crowded niches squeeze out their rarest members (competitive exclusion).
-- **Genomes build bodies** (`genome.js`). Each species has 19 genes (cell adhesion, tissues, photosynthesis, swallowing, absorbing, meat-eating, movement, size, symmetry, segments, limbs, skeleton, plant plumbing, drought-proofing, warm blood, brain, wings, display, colour), plus its domain and any organelles gained by endosymbiosis. Development turns the genes into a body:
+- **Genomes build bodies** (`genome.js`). Each species has 23 genes (cell adhesion, tissues, photosynthesis, swallowing, absorbing, meat-eating, movement, size, symmetry, segments, limbs, skeleton, plant plumbing, drought-proofing, warm blood, brain, wings, display, colour, body covering, armour, water storage, climbing), plus its domain and any organelles gained by endosymbiosis. Development turns the genes into a body:
   - **Organisation:** single cells, colonies, simple multicellular, or complex bodies with tissues and organs.
   - **Diet:** from photosynthesis, swallowing or absorbing.
   - **Body plan:** radial or bilateral, segments, limb pairs, shell, soft body or backbone, flight, warm blood, brain.
   - **Ecology follows from the body:** oxygen need, growth, feeding, metabolism (Kleiber scaling), dispersal, climate tolerance, drought, and how hard it is to catch (size, armour, speed and wings protect prey, and predators take the easiest prey first).
 - **Groups emerge.** "Fish", "insects" or "conifers" are just the nearest description of what evolved (`classify`), shown with each species' own procedurally drawn portrait (`sprites.js`). A group can evolve several times from different ancestors (**convergent evolution**), or never.
+- **Earth's familiar groups.** About 50 kinds of life can evolve:
+  - **Microbes and plankton:** bacteria, archaea, protists, diatoms (glass shells), forams (chalk shells).
+  - **Plants:** algae, seaweeds, mosses, ferns, conifers, flowering plants, grasses, cacti, vines and epiphytes, water plants.
+  - **Fungi:** molds, mushrooms, lichens.
+  - **Invertebrates:** sponges and corals, jellies, starfish, worms, molluscs, squid, crustaceans, insects, spiders, centipedes.
+  - **Vertebrates:** fish, amphibians, lizards, snakes, turtles, crocodiles, dinosaurs, pterosaurs, birds, whales.
+  - **Mammals:** small insect-eaters, rodents, hoofed mammals, carnivores, primates, bats.
+
+  Body coverings run fur → bare skin → scales → feathers. That separates mammals, amphibians, reptiles and birds, and keeps bats apart from birds. Within a family (mammals, reptiles and birds, land arthropods, seed plants) a lineage keeps its group unless its body clearly changes.
+- **Fresh water.** Rain runs downhill across the terrain and gathers into rivers; basins fill into lakes in wet climates and dry salt pans in deserts. Rivers and lakes are a fourth habitat, with their own plants, fish, insects, amphibians and river dolphins. They connect to the shore and to the land, and isolated lakes breed their own species.
 - **Developmental innovations.** Now and then a lineage produces a mutant with a big change in one gene its body plan can easily alter: another segment, a lost shell, legs, a bigger brain (evo-devo). Key innovations, once gained, are entrenched, and a backbone is never lost. Most mutants fail; the few that fit the planet found new kinds of life. Shores are where life rehearses for land: shore populations are selected for drought resistance.
 - **Behaviour evolves in individuals** (`brain.js`, `microcosm.js`). Up close, each animal has a 10-input, 6-neuron, 3-output neural network: the smell of food, the nearest danger and prey, nearby kin and hunger steer where it goes and how fast. Brains are inherited with mutations (and mixed between parents in sexual species). Predators single out prey less easily in a crowd, and sexual species must meet to breed, so herding and schooling can evolve. A species keeps a newly evolved brain only if it's an improvement. Its skills then change its planet-wide feeding rate and how easily it's caught, and pass to daughter species.
 - **Mergers** are the only scripted transitions, because genes alone can't make them:
@@ -110,6 +120,7 @@ Each zone holds the biomass of every species living there:
 | Bacteria → Archaea (the deepest split) | — |
 | Archaea + bacteria → complex cells (endosymbiosis: mitochondria) | Both in one zone, a trace of O₂ |
 | Protists + cyanobacteria → Algae (chloroplasts) | Both in one zone |
+| Mushrooms + algae → Lichens (a fungus farming algae) | Land, with algae or cyanobacteria nearby |
 
 Everything else (photosynthesis, multicellularity, animals, land plants, forests, seeds, flowers, shells, backbones, legs on land, warm blood, flight, intelligence) evolves from genes when selection favours it, and the story checklist ticks off each one when it first takes hold.
 
@@ -135,7 +146,7 @@ Each tick lasts longer while life is microbial (Hadean, Archean, Proterozoic) an
 index.html          page shell and UI markup
 style.css           styles
 src/rng.js          seeded RNG + 3D Perlin noise
-src/planet.js       geodesic grid, terrain, climate, carbon cycle, oxygen, prebiotic chemistry
+src/planet.js       geodesic grid, terrain, climate, rivers and lakes, carbon cycle, oxygen, prebiotic chemistry
 src/tectonics.js    plate tectonics: drifting plates, mountain building, rifts, supercontinent cycles
 src/genome.js       genes, development (genome → body), naming what evolved, ecology from the body, innovations
 src/sprites.js      procedural organism portraits drawn from each species' genome

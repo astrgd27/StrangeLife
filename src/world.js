@@ -348,6 +348,8 @@ export class World {
     const P = this.planet;
     let biome = BIOMES[P.biome[c]].name;
     if (!P.water[c] && P.plant[c] < 0.02 && P.biome[c] !== B.ICE && P.biome[c] !== B.MOUNTAIN) biome = P.volc[c] > 0.4 ? 'Volcanic rock' : 'Bare rock';
+    if (!P.water[c] && P.lake[c]) biome = `Lake (${biome.toLowerCase()})`;
+    else if (!P.water[c] && P.fresh[c] > 0) biome = `${biome} · river`;
     const z = this.eco.zoneOf[c];
     return {
       biome, zone: z,

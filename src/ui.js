@@ -173,7 +173,11 @@ export class UI {
       const url = spriteURL(sp, 96);
       for (const c of this.cards) if (c.tick === e.tick && !c.img) { c.img = url; c.caption = `${sp.name}: ${sp.body}`; }
       if (this.cards[0]?.tick === e.tick) this.renderCard();
-      this.firstCard('bodyplan');
+      if (EVENTS['g_' + e.grade]) this.firstCard('g_' + e.grade, { img: url, caption: `${sp.name}: ${sp.body}`, tick: e.tick });
+      else this.firstCard('bodyplan');
+    } else if (e.type === 'freshwater') {
+      this.chronicle(e.tick, `🏞️ ${e.species.name} settles in rivers and lakes: the first freshwater life.`);
+      this.firstCard('freshwater');
     } else if (e.type === 'convergent') {
       const g = e.grade;
       this.firstCard('convergent');
@@ -199,10 +203,10 @@ export class UI {
     }
   }
 
-  firstCard(key) {
+  firstCard(key, extra = {}) {
     if (this.seenEvents?.has(key)) return;
     (this.seenEvents ||= new Set()).add(key);
-    this.openCard(EVENTS[key]);
+    this.openCard({ ...EVENTS[key], ...extra });
   }
 
   toast(text, kind = '') {
@@ -482,13 +486,15 @@ function setHTML(el, html) {
 // plain-language niche: rainfall and altitude on land, depth at sea
 function nicheText(sp) {
   const parts = [];
-  if (sp.habitat === 0) parts.push(sp.n2 < 0.2 ? 'coastal shallows' : sp.n2 > 0.55 ? 'deep sea' : 'open ocean');
+  if (sp.habitat === 3) parts.push('rivers and lakes');
+  else if (sp.habitat === 0) parts.push(sp.n2 < 0.2 ? 'coastal shallows' : sp.n2 > 0.55 ? 'deep sea' : 'open ocean');
   else parts.push(sp.n2 < 0.25 ? 'dry ground' : sp.n2 > 0.7 ? 'wet ground' : 'moderate rainfall');
-  if (sp.habitat === 2) parts.push(sp.alt > 0.45 ? 'mountains' : sp.alt > 0.22 ? 'uplands' : 'lowlands');
+  if (sp.habitat >= 2) parts.push(sp.alt > 0.45 ? 'mountains' : sp.alt > 0.22 ? 'uplands' : 'lowlands');
   return parts.join(', ');
 }
 
 function nicheTags(sp) {
+  if (sp.habitat === 3) return sp.alt > 0.45 ? '<span class="tag">Mountain streams</span>' : '';
   if (sp.habitat === 0) return sp.n2 > 0.55 ? '<span class="tag h0">Deep sea</span>' : sp.n2 < 0.2 ? '<span class="tag h1">Shallows</span>' : '';
   let t = sp.n2 < 0.25 ? '<span class="tag h2">Desert</span>' : sp.n2 > 0.7 ? '<span class="tag t1">Rainforest &amp; wetland</span>' : '';
   if (sp.habitat === 2 && sp.alt > 0.45) t += '<span class="tag">Alpine</span>';

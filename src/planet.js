@@ -118,6 +118,10 @@ export class Planet {
     this.organics = new Float32Array(n);    // prebiotic organic molecules ("primordial soup")
     this.volc = new Float32Array(n);        // volcanic / hydrothermal activity 0..1
     this.water = new Uint8Array(n);
+    // rivers and lakes: water running downhill (flow), and the share of each cell that is fresh water
+    this.flow = new Float32Array(n);
+    this.fresh = new Float32Array(n);
+    this.lake = new Uint8Array(n);
     this.oceanDist = new Uint16Array(n);    // land cells: steps to the sea
     this.landDist = new Uint16Array(n);     // sea cells: steps to the shore
     this.seaLevel = 0;
@@ -203,6 +207,74 @@ export class Planet {
     this.computeDistances();
     this.computeBase();
     this.updateClimate();
+    this.computeRivers();
+  }
+
+  // Rain runs downhill from cell to cell until it reaches the sea. Basins fill with water until it
+  // spills over their lowest rim (a "priority flood" from the coasts inland), so every drop finds a
+  // way to the sea. Where enough rain gathers it is a river; a filled basin in a wet climate is a
+  // lake, in a dry one a salt pan. Ice holds rain as glaciers.
+  computeRivers() {
+    const { n, elev, water, moist, temp, flow, fresh, lake } = this;
+    const { nbrStart, nbr } = this.grid;
+    const down = this._down || (this._down = new Int32Array(n));
+    const order = this._order || (this._order = new Int32Array(n));
+    const filled = this._filled || (this._filled = new Float32Array(n));
+    const seen = this._seen || (this._seen = new Uint8Array(n));
+    // binary min-heap on spill height
+    const hk = this._hk || (this._hk = new Float32Array(n)), hv = this._hv || (this._hv = new Int32Array(n));
+    let hn = 0;
+    const push = (k, v) => {
+      let i = hn++;
+      while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; }
+      hk[i] = k; hv[i] = v;
+    };
+    const pop = () => {
+      const v = hv[0], k = hk[--hn], w = hv[hn];
+      let i = 0;
+      for (;;) {
+        let c = 2 * i + 1;
+        if (c >= hn) break;
+        if (c + 1 < hn && hk[c + 1] < hk[c]) c++;
+        if (hk[c] >= k) break;
+        hk[i] = hk[c]; hv[i] = hv[c]; i = c;
+      }
+      hk[i] = k; hv[i] = w;
+      return v;
+    };
+    for (let c = 0; c < n; c++) {
+      down[c] = -1; flow[c] = 0; fresh[c] = 0; lake[c] = 0; seen[c] = 0; filled[c] = elev[c];
+      if (water[c]) { seen[c] = 1; push(elev[c], c); }
+    }
+    let m = 0;
+    while (hn > 0) {
+      const c = pop();
+      for (let k = nbrStart[c]; k < nbrStart[c + 1]; k++) {
+        const q = nbr[k];
+        if (seen[q]) continue;
+        seen[q] = 1;
+        filled[q] = Math.max(elev[q], filled[c] + 1e-6);
+        down[q] = c;
+        order[m++] = q;
+        push(filled[q], q);
+      }
+    }
+    // collect rain from the highest cells down
+    for (let i = m - 1; i >= 0; i--) {
+      const c = order[i];
+      flow[c] += moist[c] * (temp[c] > -2 ? 1 : 0.15);
+      const d = down[c];
+      if (d >= 0 && !water[d]) flow[d] += flow[c];
+    }
+    const RIVER = 3.5;
+    for (let i = 0; i < m; i++) {
+      const c = order[i];
+      if (temp[c] < -2) continue;
+      const depth = filled[c] - elev[c];
+      // a basin holds a lake only if rain keeps it topped up
+      if (depth > 0.004 && flow[c] > 2.5 && moist[c] > 0.25) { lake[c] = 1; fresh[c] = 1; }
+      else if (flow[c] > RIVER) fresh[c] = Math.min(0.6, 0.18 + (0.42 * (flow[c] - RIVER)) / (RIVER * 8));
+    }
   }
 
   computeDistances() {
@@ -396,6 +468,7 @@ export class Planet {
     this.orbitalClock = (this.orbitalClock ?? this.age) + Math.min(1, (this.yearsPerTick ?? 5e4) / 5e4);
     if (tick % 6 === 0) this.updateOrbital();
     if (this.climateDirty || tick % 6 === 0) this.updateClimate();
+    if (tick % 60 === 0) this.computeRivers(); // rainfall shifts, rivers follow
     if (tick % 2 === 0) this.stepChemistry(2);
   }
 

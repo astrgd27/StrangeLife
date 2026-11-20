@@ -57,6 +57,14 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
   - `microcosm.js`: one zone as individuals that eat, hunt, flee, find mates, breed with inherited and mutated brains, and die. Crowds lower each animal's chance of being caught, and sexual species need a partner nearby.
   - Leaving the zone (`writeBack`): each species keeps the brain of its most successful individual if its skills improved. `Ecosystem.setParams` turns the skills into a better feeding rate and lower vulnerability across the planet, and daughter species inherit the brain.
 
+## 9. Earth's familiar groups
+- **Real:** much of Earth's visible diversity comes from a few body features: coverings (fur, feathers, scales), limb loss (snakes), armour (turtles), flight in three vertebrate groups (pterosaurs, birds, bats), and plant forms adapted to drought (cacti), grazing and fire (grasses), and life on other plants (vines, epiphytes).
+- **Game:** `genome.js` has genes for covering, armour, water storage and climbing, and `classify()` names about 50 groups. Order-level groups within a family use `pickOrder()` with a margin, so lineages keep their group unless their bodies clearly change. Grasses regrow fast, succulents do better in dry zones, climbers do better in forests, and lichens grow on bare rock (`Ecosystem.step`). Lichens arise by a fungus–alga merger.
+
+## 10. Fresh water
+- **Real:** rivers and lakes cover about 1% of Earth's surface but hold about 10% of its species. Each lake and river system is an island, so freshwater life splits into many species (cichlids, crayfish, mayflies).
+- **Game:** `Planet.computeRivers()` routes rain downhill with a priority flood from the coasts inland, so basins fill until they spill. Enough flow makes a river; a filled basin in a wet climate makes a lake. Rivers and lakes are a fourth habitat (`habitat === 3`) with their own plant capacity (`zKf`), sharing the land's food web. Life moves between fresh water, shores and land, and the up-close view draws a river through the zone.
+
 ## Also built
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)
 - Civilization stages after intelligence (`civ.js`)

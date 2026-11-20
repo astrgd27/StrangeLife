@@ -5,7 +5,7 @@
 <title>StrangeLife organism sprites</title>
 <style>
   body { background: #0b1020; color: #cfd8e6; font: 12px system-ui, sans-serif; margin: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, 150px); gap: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, 136px); gap: 10px; }
   figure { margin: 0; text-align: center; }
   canvas { background: radial-gradient(circle at 50% 40%, rgba(120,160,220,.16), rgba(8,12,22,.5)); border-radius: 12px; }
 </style>
@@ -17,9 +17,9 @@
 import { GRADE_KEYS, GRADES, previewSpecies } from '../src/ecosystem.js';
 import { drawOrganism } from '../src/sprites.js';
 const g = document.getElementById('g');
-const extra = [['fish', { trophic: 4 }], ['mammal', { trophic: 4, size: 0.9 }], ['insect', { trophic: 4 }], ['flower', { size: 0.2 }], ['bacteria', { trophic: 2 }]];
+const extra = [['fish', { trophic: 4 }], ['dinosaur', { trophic: 4 }], ['ungulate', { size: 0.9 }], ['carnivoran', { size: 0.7 }], ['flower', { size: 0.2 }], ['waterplant', { habitat: 3 }]];
 for (const [grade, opts] of [...GRADE_KEYS.map((k) => [k, {}]), ...extra]) {
-  for (const hue of [0.1, 0.6]) {
+  for (const hue of [0.3]) {
     const sp = previewSpecies(grade, { ...opts, hue });
     const f = document.createElement('figure');
     const cv = document.createElement('canvas'); cv.width = cv.height = 128; cv.style.width = cv.style.height = '128px';

@@ -91,7 +91,7 @@ $('seed-preset').value = 'bacteria';
 
 // organism designer: options for the chosen group
 const TROPHIC_LABELS = ['Chemical energy (chemotroph)', 'Sunlight (photosynthesis)', 'Dead matter (decomposer)', 'Plants & microbes (grazer)', 'Other animals (predator)', 'Both (omnivore)'];
-const HABITAT_LABELS = ['Sea', 'Coast (land and water)', 'Land'];
+const HABITAT_LABELS = ['Sea', 'Coast (land and water)', 'Land', 'Rivers and lakes'];
 function refreshDesigner() {
   const G = GRADES[$('seed-preset').value];
   $('d-trophic').innerHTML = G.trophics.map((t) => `<option value="${t}">${TROPHIC_LABELS[t]}</option>`).join('');
@@ -217,7 +217,7 @@ function click(x, y, pointerType) {
     const g = $('seed-preset').value;
     const sp = E.seed(g, E.zoneOf[cell], designerOptions());
     if (!sp) { ui.toast('Too many species alive to add another right now.', 'bad'); return; }
-    if (!E.habitatOk(sp.habitat, E.zoneOf[cell])) ui.toast(`${GRADES[sp.grade].name} need ${['open sea', 'a coastline', 'dry land'][sp.habitat]} to live.`, 'bad');
+    if (!E.habitatOk(sp.habitat, E.zoneOf[cell])) ui.toast(`${GRADES[sp.grade].name} need ${['open sea', 'a coastline', 'dry land', 'a river or lake'][sp.habitat]} to live.`, 'bad');
     else ui.toast(`You seeded ${sp.icon} ${sp.name} (${GRADES[sp.grade].name.toLowerCase()}).`, 'star');
     ui.chronicle(world.tick, `${sp.icon} ${sp.name} was seeded onto the planet.`);
     renderer.updateIcons();
