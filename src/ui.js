@@ -177,12 +177,18 @@ export class UI {
       if (EVENTS['g_' + e.grade]) this.firstCard('g_' + e.grade, { img: url, caption: `${sp.name}: ${sp.body}`, tick: e.tick });
       else this.firstCard('bodyplan');
     } else if (e.type === 'firstof') {
-      const sp = e.species, host = sp.host ? this.world.eco.species.get(sp.host) : null;
-      const txt = e.key === 'parasites' ? `${sp.icon} The first parasite: ${sp.name} lives in ${host ? host.name : 'a host'}.`
-        : e.key === 'corals' ? `${sp.icon} ${sp.name} takes algae into its tissues: the first reef-building corals.`
-        : `${sp.icon} ${sp.name} hosts microbes in its gut that digest plants for it.`;
-      this.chronicle(e.tick, txt);
-      this.firstCard(e.key, { img: spriteURL(sp, 96), caption: `${sp.name}: ${sp.body}`, tick: e.tick });
+      const sp = e.species, host = sp?.host ? this.world.eco.species.get(sp.host) : null;
+      const txt = {
+        parasites: () => `${sp.icon} The first parasite: ${sp.name} lives in ${host ? host.name : 'a host'}.`,
+        corals: () => `${sp.icon} ${sp.name} takes algae into its tissues: the first reef-building corals.`,
+        gut: () => `${sp.icon} ${sp.name} hosts microbes in its gut that digest plants for it.`,
+        toxins: () => `${sp.icon} ${sp.name} defends itself with toxins; only specialists can eat it now.`,
+        care: () => `${sp.icon} ${sp.name} raises few young and looks after them: parental care.`,
+        metamorphosis: () => `${sp.icon} The young of ${sp.name} live a different life from the adults: metamorphosis.`,
+        fire: () => '🔥 Wildfires sweep the dry lands: with enough oxygen in the air, plants burn.',
+      }[e.key]?.();
+      if (txt) this.chronicle(e.tick, txt);
+      this.firstCard(e.key, sp ? { img: spriteURL(sp, 96), caption: `${sp.name}: ${sp.body}`, tick: e.tick } : {});
     } else if (e.type === 'cascade') {
       this.chronicle(e.tick, `🕸 Trophic cascade: with ${e.species.name} gone, its prey ${e.prey.name} has boomed ${e.ratio.toFixed(1)}-fold.`, true);
       this.toast(`🕸 Trophic cascade: without its predator, ${e.prey.name} booms.`, 'bad');
@@ -328,6 +334,7 @@ export class UI {
           ${sp.trophic !== 1 && sp.eco && sp.ph?.animal ? `<dt>Defences</dt><dd>${defenceText(sp)}</dd>` : ''}
           <dt>Reproduction</dt><dd>${sp.sexual ? 'Sexual' : 'Asexual (cloning or splitting)'}</dd>
           ${sp.ph?.animal && sp.trophic !== 6 ? `<dt>Behaviour</dt><dd>${behaviourText(sp)}</dd>` : ''}
+          ${lifeText(sp)}
           ${webText(E, sp)}
         </dl>
         ${sp.ph?.animal ? `<button class="primary small-btn" data-watch="${sp.id}">🔬 Watch it up close</button>` : ''}`;
@@ -342,7 +349,7 @@ export class UI {
           <span class="tag h${sp.habitat}">${HABITAT_NAMES[sp.habitat]}</span>
           ${sp.pref < 2 ? '<span class="tag h0">Cold-adapted</span>' : sp.pref > 30 ? '<span class="tag t5">Heat-loving</span>' : ''}
           ${nicheTags(sp)}
-          ${sp.host && sp.trophic !== 6 ? '<span class="tag t3">Specialist</span>' : ''}${sp.keystone ? '<span class="tag key">Keystone</span>' : ''}${sp.ph?.partner ? '<span class="tag mut">Partners</span>' : ''}${sp.island ? '<span class="tag h1">Island</span>' : ''}${sp.range > 0 && sp.range <= 15 ? '<span class="tag">Endemic</span>' : ''}
+          ${sp.host && sp.trophic !== 6 ? '<span class="tag t3">Specialist</span>' : ''}${sp.keystone ? '<span class="tag key">Keystone</span>' : ''}${sp.ph?.toxins > 0.6 ? '<span class="tag t6">Toxic</span>' : ''}${sp.ph?.sociality > 0.6 ? `<span class="tag">${sp.ph.skeleton === 'endo' ? 'Herds' : 'Colonies'}</span>` : ''}${sp.ph?.metamorphosis > 0.6 ? '<span class="tag">Metamorphosis</span>' : ''}${sp.ph?.partner ? '<span class="tag mut">Partners</span>' : ''}${sp.island ? '<span class="tag h1">Island</span>' : ''}${sp.range > 0 && sp.range <= 15 ? '<span class="tag">Endemic</span>' : ''}
         </span>${detail}</li>`;
     });
     setHTML($('species-list'), rows.join('') || '<li class="muted small">None living.</li>');
@@ -603,5 +610,23 @@ function webText(E, sp) {
   if (sp.keystone) rows.push(['Keystone', `Holds ${sp.keystone.map((id) => E.species.get(id)).filter(Boolean).slice(0, 2).map(nm).join(' and ')} in check`]);
   const P = { algae: 'Algae living in its tissues feed it sugar (it can bleach in heat)', gut: 'Gut microbes digest plants for it', roots: 'Root bacteria fix nitrogen for it' };
   if (sp.ph?.partner) rows.push(['Partners', P[sp.ph.partner]]);
+  return rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+}
+
+// how a species lives its life: young, care, colonies, defences
+function lifeText(sp) {
+  const ph = sp.ph;
+  if (!ph) return '';
+  const rows = [];
+  if (ph.plant) {
+    if (ph.toxins > 0.6) rows.push(['Defences', 'Toxic: most grazers leave it alone, but specialists can eat it']);
+    if (sp.grade === 'grass') rows.push(['Survival', 'Regrows from the base after grazing and fire']);
+  }
+  if (ph.animal && ph.level === 3 && sp.trophic !== 6) {
+    const c = ph.care;
+    rows.push(['Young', c > 0.6 ? 'Few, and well looked after' : c < 0.3 ? 'Many, left to chance' : 'A moderate number, with some care']);
+    if (ph.metamorphosis > 0.6) rows.push(['Growing up', ph.skeleton === 'endo' ? 'Tadpoles live in water before changing into adults' : 'Larvae live and eat differently from the adults']);
+    if (ph.sociality > 0.6) rows.push(['Social life', ph.skeleton === 'endo' ? (sp.trophic === 4 ? 'Hunts in packs' : 'Lives in herds, safer from predators') : 'Colonies with a queen and workers']);
+  }
   return rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
 }

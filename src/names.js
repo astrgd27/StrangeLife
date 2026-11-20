@@ -39,6 +39,7 @@ const GRADE_ENDS = {
   vine: ['vitis', 'hedera', 'liana', 'orchis', 'bromelia', 'philodendron'],
   lichen: ['lichen', 'cladonia', 'usnea', 'parmelia', 'lecanora'],
   starfish: ['aster', 'echinus', 'crinus', 'ophiura', 'holothuria'],
+  socialinsect: ['myrmex', 'formica', 'apis', 'termes', 'vespa', 'atta'],
   arachnid: ['araneus', 'scorpius', 'opilio', 'acarus', 'lycosa'],
   myriapod: ['scolopendra', 'iulus', 'myriapus', 'arthropleura', 'geophilus'],
   snake: ['ophis', 'boa', 'naja', 'vipera', 'python', 'serpens'],

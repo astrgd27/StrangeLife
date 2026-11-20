@@ -98,7 +98,7 @@ Ordered by how much Earth-like variety each adds for the effort.
    - **Food webs:** each species eats specific others, by size and defences, giving keystone species and trophic cascades.
    - **Parasites:** perhaps half of all species, each often tied to one host.
    - **Partnerships:** coral and algae, gut microbes, cleaner fish.
-4. **Arms races and life histories.**
+4. ✅ **Arms races and life histories.** (Built.)
    - **Plant defences:** plant toxins versus specialist herbivores (why there are so many beetles), and grasses evolving alongside grazers.
    - **Fire:** shaping savannas.
    - **Life histories:** many small offspring or few big ones, parental care, metamorphosis (larva and adult living different lives), social insects.

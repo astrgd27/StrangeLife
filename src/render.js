@@ -395,6 +395,13 @@ export class Renderer {
         const w = P.water[c] ? 0.5 : 1;
         out[c * 3] = (0.1 + 0.85 * v) * w; out[c * 3 + 1] = (0.1 + 0.35 * v) * w; out[c * 3 + 2] = (0.18 + 0.55 * v) * w;
       }
+    } else if (this.overlay === 'fire') {
+      // where wildfires have burned recently: savannas and dry woodlands glow
+      const zf = E.zFire;
+      for (let c = 0; c < P.n; c++) {
+        const v = zf ? Math.min(1, zf[E.zoneOf[c]] / 3) : 0, w = P.water[c] ? 0.4 : 1;
+        out[c * 3] = (0.12 + 0.88 * v) * w; out[c * 3 + 1] = (0.1 + 0.45 * v * v) * w; out[c * 3 + 2] = (0.12 + 0.05 * v) * w;
+      }
     } else if (this.overlay === 'diversity') {
       // number of species per zone
       for (let c = 0; c < P.n; c++) {

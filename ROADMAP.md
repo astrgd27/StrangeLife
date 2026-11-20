@@ -74,6 +74,14 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
   - Partnerships (gene `symbiosis`): coral algae (sugar from light in sunlit shallows; mortality and lost partners above their heat tolerance, i.e. bleaching), gut microbes (better digestion of plants), root bacteria (higher plant capacity). Reefs are now built only by corals with algae.
   - `webOf(z)` and `foodweb.js`: the food-web view of a zone.
 
+## 12. Arms races, fire and life histories
+- **Real:** plants defend themselves chemically, and insects that overcome one plant's defences specialise on it; this arms race is a big part of why there are so many beetles. Grasses tolerate grazing and fire, and grass–fire feedbacks keep savannas open. Animals differ in life history: many young or few cared-for young, larvae that live differently from adults, and colonies of social insects that dominate many ecosystems.
+- **Game:**
+  - Gene `toxins` (plants): growth cost; palatability `tPal` weights the food generalist grazers can find and the grazing losses a plant takes. Specialists (`tHost`) eat their host fully and their feeding is taken from that plant alone; new specialists favour toxic hosts (`chooseHost`).
+  - Grasses lose about half as much to grazing (`tGraze`).
+  - `Ecosystem.wildfires()`: every 10 ticks, dry land zones burn with a chance set by oxygen (from ~13%), dryness and fuel (grass counts double). Each species keeps a share by `tFire` (grasses and animals mostly survive, trees mostly burn); ash returns nutrients. `zFire` drives the Fire map view.
+  - Genes `care`, `metamorphosis`, `sociality` (animals) change conversion efficiency, mortality, self-limitation, dispersal, feeding and defences in `ecology()`. Social insects are their own group, arise now and then from land insects, and speciate more slowly (few breeders).
+
 ## Also built
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)
 - Civilization stages after intelligence (`civ.js`)

@@ -15,7 +15,7 @@ w.on((e) => {
   if (e.type === 'island') isl++;
   if (e.type === 'newgroup') console.log(`[${e.tick} ${formatYears(e.years)}] new group ${e.grade} from ${e.parent?.grade}: ${e.species.body}`);
   if (e.type === 'convergent') console.log(`[${e.tick}] convergent ${e.grade} #${e.count} from ${e.parent.grade}`);
-  if (e.type === 'firstof') console.log(`[${e.tick}] first ${e.key}: ${e.species.name} (${e.species.grade}${e.species.host ? ' on ' + w.eco.species.get(e.species.host)?.grade : ''})`);
+  if (e.type === 'firstof') console.log(`[${e.tick}] first ${e.key}${e.species ? `: ${e.species.name} (${e.species.grade}${e.species.host ? ' on ' + w.eco.species.get(e.species.host)?.grade : ''})` : ''}`);
   if (e.type === 'cascade') console.log(`[${e.tick}] CASCADE: without ${e.species.name} (${e.species.grade}), ${e.prey.name} (${e.prey.grade}) x${e.ratio.toFixed(1)}`);
   if (e.type === 'radiation') console.log(`[${e.tick}] radiation of ${e.grade} (${e.count})`);
 });
@@ -28,7 +28,7 @@ for (let t = 1; t <= ticks; t++) {
     const grades = {};
     for (const s of E.alive) { const g = E.slots[s].grade; grades[g] = (grades[g] || 0) + 1; }
     const h = w.history[w.history.length - 1];
-    console.log(`t=${t} ${EONS[w.eon].name} ${formatYears(w.years)} T=${P.meanT.toFixed(1)} co2=${P.co2.toFixed(1)} o2=${P.o2.toFixed(1)} iron=${P.iron.toFixed(2)} ice=${P.iceFrac.toFixed(2)} ocean=${P.oceanFrac.toFixed(2)} prod=${P.primaryProduction.toFixed(3)} land=${(P.landProduction||0).toFixed(3)} cover=${P.landPlantCover.toFixed(2)} abio=${w.abiogenesis.toFixed(2)} plates=${w.tect.moves}mv land:${(w.tect.largestShare*100).toFixed(0)}%/${w.tect.landmasses} allo=${allo} co=${co} ss=${ss} isl=${isl} orb=${w.planet.orbital.toFixed(1)} | sp=${E.alive.length} fw=${E.alive.filter((q) => E.slots[q].habitat === 3).length} par=${E.alive.filter((q) => E.slots[q].trophic === 6).length} key=${E.alive.filter((q) => E.slots[q].keystone).length} life=${(h.lifeZones*100).toFixed(0)}% ${Object.entries(grades).map(([g, n]) => g + ':' + n).join(' ')}`);
+    console.log(`t=${t} ${EONS[w.eon].name} ${formatYears(w.years)} T=${P.meanT.toFixed(1)} co2=${P.co2.toFixed(1)} o2=${P.o2.toFixed(1)} iron=${P.iron.toFixed(2)} ice=${P.iceFrac.toFixed(2)} ocean=${P.oceanFrac.toFixed(2)} prod=${P.primaryProduction.toFixed(3)} land=${(P.landProduction||0).toFixed(3)} cover=${P.landPlantCover.toFixed(2)} abio=${w.abiogenesis.toFixed(2)} plates=${w.tect.moves}mv land:${(w.tect.largestShare*100).toFixed(0)}%/${w.tect.landmasses} allo=${allo} co=${co} ss=${ss} isl=${isl} orb=${w.planet.orbital.toFixed(1)} | sp=${E.alive.length} fw=${E.alive.filter((q) => E.slots[q].habitat === 3).length} par=${E.alive.filter((q) => E.slots[q].trophic === 6).length} key=${E.alive.filter((q) => E.slots[q].keystone).length} fire=${(E.firesRecent || 0).toFixed(0)} life=${(h.lifeZones*100).toFixed(0)}% ${Object.entries(grades).map(([g, n]) => g + ':' + n).join(' ')}`);
   }
 }
 console.log(`avg ${((Date.now() - t1) / ticks).toFixed(2)} ms/tick`);

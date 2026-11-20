@@ -81,6 +81,9 @@ Each zone holds the biomass of every species living there:
 - **Food webs.** Predators choose their prey: hunters take animals about a third of their own size, filter-feeders much smaller ones, and well-defended prey (big, armoured, fast, flying) are both safer and poorer food. Each predator–prey link carries its own flow of food, so a predator that takes most of a common prey's losses is a **keystone species**. When one dies out, its prey can boom: a **trophic cascade**, reported in the chronicle.
 - **Parasites.** Protists, fungi, worms and small arthropods can take to living in one host species. Hosts' defences keep parasites a modest share of their biomass, parasites spread only where their hosts live, and they split along with their hosts (cospeciation).
 - **Partnerships.** One gene means different partners in different bodies: algae living in coral tissues (corals build reefs and **bleach** when the sea gets too warm), gut microbes that digest plants for grazers, and nitrogen-fixing bacteria in plant roots. Mycorrhizal fungi and pollinators work as before.
+- **Arms races.** Plants can evolve toxins: they grow more slowly, but most grazers leave them alone. Specialist insects that beat one plant's defences get food nobody else can eat, so new specialists favour toxic plants, one reason insects are so diverse. Grasses regrow from the base and shrug off much of their grazing.
+- **Wildfire.** Once there is about 13% oxygen and plants on land, dry places with plenty of fuel burn now and then. Trees burn; grasses resprout and are good fuel, so grass and fire together can hold back the forest. The *Fire* map view shows where fires burn.
+- **Life histories.** Animals can evolve parental care (few young, well looked after: they survive better and hold their own, but recover more slowly), metamorphosis (larvae and adults live differently, so a species competes less with itself), and social living: colonies with queens and workers in insects (ants, bees and termites, which arise now and then from ordinary insects) and herds and packs in vertebrates.
 - **The food-web view.** Inspect a zone and press **🕸 Food web** (or `W`) to see who eats whom there, by trophic level, with parasites and partnerships.
 - **Producers** (cyanobacteria, algae, plants) grow logistically and compete for light.
 - **Consumers** feed from shared pools with a saturating (Holling type II) response: chemotrophs on organic molecules, grazers on producers or microbes, predators on grazers, decomposers on dead matter.
@@ -100,7 +103,7 @@ Each zone holds the biomass of every species living there:
 - **Sexual selection.** In birds, fish and other showy animals, mate choice alone can split a population into new species.
 - **Geographic isolation (allopatric speciation).** When part of a species' range is cut off by an opening sea, a rising mountain range or a band of hostile climate, and stays cut off, it becomes a new species adapted to its own patch. Drifting continents keep making new barriers.
 - **Speciation at range edges.** Stressed populations at the edge of a range also split off as new species with a new temperature niche, diet, habitat or body size. Sexual species split faster. Speciation slows as a niche fills (diversity-dependent diversification), and crowded niches squeeze out their rarest members (competitive exclusion).
-- **Genomes build bodies** (`genome.js`). Each species has 23 genes (cell adhesion, tissues, photosynthesis, swallowing, absorbing, meat-eating, movement, size, symmetry, segments, limbs, skeleton, plant plumbing, drought-proofing, warm blood, brain, wings, display, colour, body covering, armour, water storage, climbing), plus its domain and any organelles gained by endosymbiosis. Development turns the genes into a body:
+- **Genomes build bodies** (`genome.js`). Each species has 29 genes (cell adhesion, tissues, photosynthesis, swallowing, absorbing, meat-eating, movement, size, symmetry, segments, limbs, skeleton, plant plumbing, drought-proofing, warm blood, brain, wings, display, colour, body covering, armour, water storage, climbing, parasitism, partnerships, toxins, parental care, metamorphosis, social living), plus its domain and any organelles gained by endosymbiosis. Development turns the genes into a body:
   - **Organisation:** single cells, colonies, simple multicellular, or complex bodies with tissues and organs.
   - **Diet:** from photosynthesis, swallowing or absorbing.
   - **Body plan:** radial or bilateral, segments, limb pairs, shell, soft body or backbone, flight, warm blood, brain.
@@ -189,7 +192,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled, and [IDEAS.md](IDEAS.md) for what's next, including the plan to go deeper than SimEarth.
 
-Next on the list: arms races and life histories (plant toxins, grasses and grazers, fire, metamorphosis, social insects), then Earth's geographic patterns and checking the planet against Earth.
+Next on the list: Earth's geographic patterns (seasons and migration, ocean currents and upwelling, rain shadows, biogeographic realms), then checking the planet against Earth's own diversity patterns.
 
 ## License
 

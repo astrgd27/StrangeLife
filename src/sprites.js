@@ -349,7 +349,29 @@ function drawSquid(ctx, sp, R, C) {
   eye(ctx, R * 0.12, -R * 0.08, R * 0.11);
 }
 
+// ants, bees and termites: a few colony members, each with a narrow waist and elbowed antennae
+function drawColony(ctx, sp, R, C) {
+  const bee = sp.trophic === 3, body = bee ? '#e0a52c' : C.dark, stripe = '#2b2116';
+  const one = (x, y, s, a) => {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.strokeStyle = stripe; ctx.lineWidth = Math.max(1, s * 0.06); ctx.lineCap = 'round';
+    for (const dx of [-0.15, 0.05, 0.25]) for (const sgn of [-1, 1]) { ctx.beginPath(); ctx.moveTo(dx * s, 0); ctx.lineTo(dx * s + 0.15 * s, sgn * 0.35 * s); ctx.lineTo(dx * s + 0.05 * s, sgn * 0.55 * s); ctx.stroke(); }
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.ellipse(-0.45 * s, 0, 0.32 * s, 0.24 * s, 0, 0, TAU); ctx.fill();
+    if (bee) { ctx.fillStyle = stripe; for (const dx of [-0.55, -0.38]) ctx.fillRect(dx * s, -0.22 * s, 0.07 * s, 0.44 * s); ctx.fillStyle = body; }
+    ctx.beginPath(); ctx.ellipse(0.05 * s, 0, 0.18 * s, 0.12 * s, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0.4 * s, 0, 0.16 * s, 0.14 * s, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0.5 * s, -0.08 * s); ctx.lineTo(0.62 * s, -0.35 * s); ctx.lineTo(0.8 * s, -0.3 * s); ctx.moveTo(0.5 * s, 0.08 * s); ctx.lineTo(0.62 * s, 0.35 * s); ctx.lineTo(0.8 * s, 0.3 * s); ctx.stroke();
+    if (bee) { ctx.fillStyle = 'rgba(220,235,255,0.6)'; ctx.beginPath(); ctx.ellipse(-0.05 * s, -0.3 * s, 0.25 * s, 0.13 * s, -0.4, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  };
+  one(-R * 0.25, -R * 0.35, R * 0.75, 0.15);
+  one(R * 0.3, R * 0.1, R * 0.7, -0.3);
+  one(-R * 0.35, R * 0.45, R * 0.6, 0.4);
+}
+
 function drawArthropod(ctx, sp, R, C) {
+  if (sp.grade === 'socialinsect') return drawColony(ctx, sp, R, C);
   const ph = sp.ph, g = sp.genes;
   const n = Math.max(2, Math.min(8, ph.segments + 1)), armour = ph.skeleton === 'exo';
   const len = R * 1.5, seg = len / (n + 0.8), y = R * 0.05;

@@ -11,6 +11,7 @@ export const GENES = [
   'adhesion', 'differentiation', 'photo', 'ingest', 'absorb', 'carnivory', 'motility', 'size',
   'symmetry', 'segments', 'limbs', 'skeleton', 'vascular', 'landAdapt', 'endothermy', 'brain',
   'wings', 'display', 'hue', 'covering', 'armour', 'succulence', 'climbing', 'parasitism', 'symbiosis',
+  'toxins', 'care', 'metamorphosis', 'sociality',
 ];
 export const NG = GENES.length;
 export const GI = Object.fromEntries(GENES.map((g, i) => [g, i]));
@@ -41,6 +42,10 @@ export const GENE_INFO = {
   climbing: 'Climbs other plants to reach the light, like vines and orchids',
   parasitism: 'Lives on or in one host species and feeds on it',
   symbiosis: 'Partners with microbes: algae in corals, gut microbes in grazers, nitrogen-fixing bacteria in plant roots',
+  toxins: 'Chemical defences that make a plant poor food for most grazers',
+  care: 'Few young, well looked after (high), or many young left to chance (low)',
+  metamorphosis: 'Young (larvae, tadpoles) live a different life from the adults',
+  sociality: 'Lives in colonies with workers and queens (insects), or in herds and packs',
 };
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -51,6 +56,8 @@ export function makeGenes(obj = {}) {
   if (obj.skeleton === undefined) g[GI.skeleton] = 0.5;
   if (obj.covering === undefined) g[GI.covering] = 0.32; // bare skin: the ground state
   for (const k of ['armour', 'succulence', 'climbing', 'parasitism', 'symbiosis']) if (obj[k] === undefined) g[GI[k]] = 0.05;
+  // life-history genes start part-way, so one big change can tip a lineage over
+  for (const [k, v] of [['toxins', 0.15], ['care', 0.2], ['metamorphosis', 0.2], ['sociality', 0.2]]) if (obj[k] === undefined) g[GI[k]] = v;
   if (obj.hue === undefined) g[GI.hue] = 0.5;
   return g;
 }
@@ -111,6 +118,10 @@ export function develop(sp) {
     level, euk, photo, trophic, animal, plant, fungus, lichen, radial, motile, segments, limbs, skeleton,
     size, endo, brain, flying, vascular, sapient, covering, armour, shelled, parasite, partner,
     succulence: plant ? G('succulence') : 0, climbing: plant ? G('climbing') : 0,
+    toxins: plant ? G('toxins') : 0,
+    care: animal && level === 3 ? G('care') : 0,
+    metamorphosis: animal && level === 3 && (skeleton === 'exo' || covering === 'skin' || skeleton === 'none') ? G('metamorphosis') : 0,
+    sociality: animal && level === 3 ? G('sociality') : 0,
     landAdapt: G('landAdapt'), display: G('display'), differentiation: G('differentiation'), motility: G('motility'),
     tier: !euk ? 0 : level <= 1 ? 1 : level === 2 ? 2 : sapient ? 6 : 3 + (skeleton === 'endo' ? 1 : 0) + (endo || vascular > 0.65 ? 1 : 0),
   };
@@ -174,6 +185,7 @@ const SAUROPSIDS = [
   { g: 'reptile' },
 ];
 const LAND_ARTHROPODS = [
+  { g: 'socialinsect', rule: (G, ph, h, m) => G('sociality') > 0.6 - m && ph.limbs === 3 },
   { g: 'myriapod', rule: (G, ph, h, m) => G('segments') > 0.61 - m },
   { g: 'arachnid', rule: (G, ph, h, m) => G('limbs') > 0.875 - m && !ph.flying && G('carnivory') > 0.5 - m },
   { g: 'insect' },
@@ -212,6 +224,9 @@ export function describe(ph) {
     if (ph.covering === 'fur' || ph.covering === 'feathers' || ph.covering === 'scales') parts.push(ph.covering);
     else if (ph.covering === 'skin') parts.push('bare skin');
     if (ph.armour > 0.6) parts.push('armoured');
+    if (ph.metamorphosis > 0.6) parts.push('metamorphosis');
+    if (ph.care > 0.6) parts.push('cares for its young');
+    if (ph.sociality > 0.6) parts.push(ph.skeleton === 'endo' ? 'lives in groups' : 'lives in colonies');
     if (ph.flying) parts.push('flying');
     if (ph.endo) parts.push('warm-blooded');
     if (ph.brain > 0.6) parts.push(ph.brain > 0.85 ? 'large brain' : 'brain');
@@ -223,6 +238,7 @@ export function describe(ph) {
   if (ph.shelled) parts.push(ph.photo ? 'glass shell' : 'chalky shell');
   if (ph.plant) {
     if (ph.succulence > 0.6) parts.push('water-storing');
+    if (ph.toxins > 0.6) parts.push('toxic');
     if (ph.climbing > 0.6) parts.push('climbing');
     if (ph.vascular > 0.35) parts.push(ph.vascular > 0.65 ? 'tall, woody' : 'vascular');
     if (ph.landAdapt > 0.6) parts.push(ph.display > 0.6 ? 'flowers and seeds' : 'seeds');
@@ -291,6 +307,23 @@ export function ecology(sp, ph) {
     Object.assign(p, { imax: 0.2, half: 0.003, e: 0.45, m: 0.02, self: 0.5, disp: 0.06, tol: 12 });
   }
   if (ph.partner === 'gut') { p.e *= 1.2; p.m *= 1.04; }
+  // plant defences: toxins cost growth but put most grazers off
+  if (ph.toxins) { p.r *= 1 - 0.25 * ph.toxins; p.pal = 1 - 0.8 * ph.toxins; }
+  // life histories. Parental care: fewer young, slower to bounce back, but far more survive and
+  // hold their own. No care: many young, quick to recover and spread, many die.
+  if (ph.animal && ph.level === 3) {
+    const c = ph.care;
+    p.e *= 1 - 0.25 * c; p.m *= 1 - 0.35 * c; p.self *= 1 - 0.3 * c; p.disp *= 1 + 0.5 * (1 - c);
+    // metamorphosis: larvae and adults eat different things, so a species competes less with itself
+    if (ph.metamorphosis > 0.5) { p.self *= 0.7; p.m *= 1.05; }
+    // social living: insect colonies forage efficiently and defend themselves; herds and packs
+    // protect prey and help hunters
+    const so = ph.sociality;
+    // (colonies also cost: workers don't breed, and a colony needs a big, steady food supply)
+    if (ph.skeleton !== 'endo') { p.imax *= 1 + 0.15 * so; p.half *= 1 + 0.3 * so; p.self *= 1 - 0.2 * so; p.socialDefence = 0.8 * so; }
+    else if (sp.trophic === 4) p.imax *= 1 + 0.15 * so;
+    else p.socialDefence = 0.4 * so;
+  }
   if (ph.partner === 'roots') { p.r *= 0.95; p.roots = 1; }
   if (ph.partner === 'algae') p.coral = 1;
   p.imax *= sz; if (!ph.photo) p.m *= sz;
@@ -299,6 +332,7 @@ export function ecology(sp, ph) {
   if (!ph.photo) {
     p.vuln = 1 / (1 + 2.5 * s + (ph.skeleton === 'exo' ? 1.2 : ph.skeleton === 'endo' ? 0.6 : 0) + 1.5 * ph.armour + (ph.flying ? 0.8 : 0) + 0.6 * (ph.motile ? ph.motility : 0));
     if (ph.shelled) p.vuln *= 0.6;
+    if (p.socialDefence) p.vuln /= 1 + p.socialDefence;
   }
   // drying out: land needs a waterproof skin, lungs, seeds or eggs; they cost a little to build
   // (bare skin loses water fast, so amphibians stay near water; scales hold it in)
@@ -338,7 +372,7 @@ export function evolvable(sp, ph) {
   if (ph.level <= 1) return sp.chloro ? { adhesion: 3, photo: 0.5, size: 1, motility: 1, skeleton: 0.4 } : { adhesion: 3, absorb: key('absorb', 0.45, 2), ingest: 1, carnivory: 1, motility: 1, size: 1, skeleton: 0.4, parasitism: key('parasitism', 0.6, 0.8) };
   if (ph.plant) {
     const seed = ph.vascular >= 0.5 ? 1.2 : 0;
-    return { differentiation: key('differentiation', 0.55, 2), vascular: key('vascular', 0.65, 3), landAdapt: 2, display: 2, size: 2, succulence: seed, climbing: seed, symbiosis: ph.vascular >= 0.35 ? 0.8 : 0 };
+    return { differentiation: key('differentiation', 0.55, 2), vascular: key('vascular', 0.65, 3), landAdapt: 2, display: 2, size: 2, succulence: seed, climbing: seed, symbiosis: ph.vascular >= 0.35 ? 0.8 : 0, toxins: 1.5 };
   }
   if (ph.fungus) return { differentiation: 1, landAdapt: 2, size: 1, parasitism: key('parasitism', 0.6, 0.8) };
   if (!ph.animal) return { differentiation: 2, ingest: 1, absorb: 1 };
@@ -353,6 +387,10 @@ export function evolvable(sp, ph) {
     // soft worms and small arthropods can become parasites; grazers can take on gut microbes
     parasitism: ph.skeleton === 'endo' ? 0 : key('parasitism', 0.6, ph.skeleton === 'none' ? 1 : ph.size < 0.2 ? 0.5 : 0),
     symbiosis: (sp.trophic === 3 || sp.trophic === 5) ? 0.6 : ph.radial || !ph.motile ? 1.2 : 0,
+    // life histories
+    care: ph.skeleton === 'endo' ? 1.2 : 0.4,
+    metamorphosis: ph.skeleton === 'exo' || ph.covering === 'skin' || ph.skeleton === 'none' ? 1 : 0,
+    sociality: ph.skeleton === 'exo' && ph.limbs === 3 ? key('sociality', 0.6, 2.2) : ph.skeleton === 'endo' ? 0.6 : 0,
   };
 }
 
@@ -389,8 +427,8 @@ export const ARCHETYPES = {
   seaweed: A({ adhesion: 0.75, differentiation: 0.3, photo: 0.85, size: 0.6, segments: 0.5 }, 'eukaryote', true, true),
   moss: A({ adhesion: 0.75, differentiation: 0.6, photo: 0.85, size: 0.15, vascular: 0.2, landAdapt: 0.6 }, 'eukaryote', true, true),
   fern: A({ adhesion: 0.8, differentiation: 0.7, photo: 0.85, size: 0.4, vascular: 0.5, landAdapt: 0.6 }, 'eukaryote', true, true),
-  conifer: A({ adhesion: 0.85, differentiation: 0.75, photo: 0.85, size: 0.8, vascular: 0.8, landAdapt: 0.8, display: 0.2 }, 'eukaryote', true, true),
-  flower: A({ adhesion: 0.85, differentiation: 0.75, photo: 0.85, size: 0.5, vascular: 0.75, landAdapt: 0.8, display: 0.8 }, 'eukaryote', true, true),
+  conifer: A({ adhesion: 0.85, differentiation: 0.75, photo: 0.85, size: 0.8, vascular: 0.8, landAdapt: 0.8, display: 0.2, toxins: 0.45 }, 'eukaryote', true, true),
+  flower: A({ adhesion: 0.85, differentiation: 0.75, photo: 0.85, size: 0.5, vascular: 0.75, landAdapt: 0.8, display: 0.8, toxins: 0.3 }, 'eukaryote', true, true),
   fungi: A({ adhesion: 0.7, differentiation: 0.3, absorb: 0.8, size: 0.3 }),
   mushroom: A({ adhesion: 0.75, differentiation: 0.4, absorb: 0.8, size: 0.4, landAdapt: 0.6 }),
   sponge: A({ adhesion: 0.7, differentiation: 0.3, ingest: 0.7, carnivory: 0.2, motility: 0.1, size: 0.5, symmetry: 0.2, symbiosis: 0.7 }),
@@ -407,26 +445,27 @@ export const ARCHETYPES = {
   vine: plant({ size: 0.3, display: 0.5, climbing: 0.85 }),
   waterplant: plant({ size: 0.3, vascular: 0.5, landAdapt: 0.4, display: 0.65 }),
   starfish: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.7, carnivory: 0.6, motility: 0.4, size: 0.4, symmetry: 0.15, segments: 0.5, skeleton: 0.15 }),
+  socialinsect: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.4, motility: 0.6, size: 0.15, symmetry: 0.85, segments: 0.3, limbs: 0.75, skeleton: 0.12, landAdapt: 0.8, wings: 0.3, metamorphosis: 0.8, sociality: 0.85, care: 0.6 }),
   arachnid: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.85, motility: 0.6, size: 0.25, symmetry: 0.85, segments: 0.15, limbs: 0.95, skeleton: 0.12, landAdapt: 0.8 }),
   myriapod: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.4, motility: 0.5, size: 0.3, symmetry: 0.85, segments: 0.85, limbs: 0.75, skeleton: 0.12, landAdapt: 0.7 }),
   snake: vert({ carnivory: 0.85, motility: 0.6, size: 0.4, segments: 0.9, limbs: 0.02, covering: 0.6, brain: 0.4 }),
   turtle: vert({ carnivory: 0.3, motility: 0.3, size: 0.5, covering: 0.6, armour: 0.85, brain: 0.35 }),
-  crocodile: vert({ carnivory: 0.85, motility: 0.6, size: 0.7, covering: 0.6, armour: 0.35, landAdapt: 0.7, brain: 0.4 }),
-  dinosaur: vert({ carnivory: 0.2, motility: 0.6, size: 0.85, covering: 0.62, endothermy: 0.6, brain: 0.45 }),
+  crocodile: vert({ carnivory: 0.85, motility: 0.6, size: 0.7, covering: 0.6, armour: 0.35, landAdapt: 0.7, brain: 0.4, care: 0.5 }),
+  dinosaur: vert({ carnivory: 0.2, motility: 0.6, size: 0.85, covering: 0.62, endothermy: 0.6, brain: 0.45, care: 0.5 }),
   pterosaur: vert({ carnivory: 0.75, motility: 0.8, size: 0.3, covering: 0.35, endothermy: 0.6, wings: 0.85, brain: 0.45 }),
-  bat: vert({ carnivory: 0.7, motility: 0.8, size: 0.15, covering: 0.08, endothermy: 0.8, wings: 0.85, brain: 0.5 }),
-  rodent: vert({ carnivory: 0.3, motility: 0.7, size: 0.15, covering: 0.08, endothermy: 0.8, brain: 0.5 }),
-  ungulate: vert({ carnivory: 0.1, motility: 0.8, size: 0.6, covering: 0.08, endothermy: 0.8, brain: 0.5, symbiosis: 0.75 }),
-  carnivoran: vert({ carnivory: 0.85, motility: 0.8, size: 0.45, covering: 0.08, endothermy: 0.8, brain: 0.6 }),
-  primate: vert({ carnivory: 0.45, motility: 0.7, size: 0.4, covering: 0.08, endothermy: 0.8, brain: 0.78 }),
-  insect: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.2, motility: 0.6, size: 0.25, symmetry: 0.85, segments: 0.3, limbs: 0.75, skeleton: 0.12, landAdapt: 0.75, wings: 0.7 }),
-  fish: A({ adhesion: 0.85, differentiation: 0.8, ingest: 0.75, carnivory: 0.3, motility: 0.75, size: 0.4, symmetry: 0.85, segments: 0.3, limbs: 0.5, skeleton: 0.88, brain: 0.3, covering: 0.6 }),
-  amphibian: A({ adhesion: 0.85, differentiation: 0.8, ingest: 0.75, carnivory: 0.8, motility: 0.6, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.55, brain: 0.35, covering: 0.32 }),
-  reptile: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.6, size: 0.45, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, brain: 0.4, covering: 0.6 }),
-  mammal: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.2, motility: 0.7, size: 0.45, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.55, covering: 0.08 }),
-  bird: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.8, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.5, wings: 0.85, display: 0.7, covering: 0.9 }),
-  whale: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.8, motility: 0.8, size: 0.85, symmetry: 0.85, segments: 0.2, limbs: 0.3, skeleton: 0.88, landAdapt: 0.5, endothermy: 0.8, brain: 0.6, covering: 0.08 }),
-  sapient: A({ adhesion: 0.9, differentiation: 0.9, ingest: 0.8, carnivory: 0.5, motility: 0.7, size: 0.5, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.95, covering: 0.08 }),
+  bat: vert({ carnivory: 0.7, motility: 0.8, size: 0.15, covering: 0.08, endothermy: 0.8, wings: 0.85, brain: 0.5, care: 0.85 }),
+  rodent: vert({ carnivory: 0.3, motility: 0.7, size: 0.15, covering: 0.08, endothermy: 0.8, brain: 0.5, care: 0.6 }),
+  ungulate: vert({ carnivory: 0.1, motility: 0.8, size: 0.6, covering: 0.08, endothermy: 0.8, brain: 0.5, symbiosis: 0.75, care: 0.8, sociality: 0.65 }),
+  carnivoran: vert({ carnivory: 0.85, motility: 0.8, size: 0.45, covering: 0.08, endothermy: 0.8, brain: 0.6, care: 0.85, sociality: 0.5 }),
+  primate: vert({ carnivory: 0.45, motility: 0.7, size: 0.4, covering: 0.08, endothermy: 0.8, brain: 0.78, care: 0.9, sociality: 0.7 }),
+  insect: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.2, motility: 0.6, size: 0.25, symmetry: 0.85, segments: 0.3, limbs: 0.75, skeleton: 0.12, landAdapt: 0.75, wings: 0.7, metamorphosis: 0.75 }),
+  fish: A({ adhesion: 0.85, differentiation: 0.8, ingest: 0.75, carnivory: 0.3, motility: 0.75, size: 0.4, symmetry: 0.85, segments: 0.3, limbs: 0.5, skeleton: 0.88, brain: 0.3, covering: 0.6, care: 0.15 }),
+  amphibian: A({ adhesion: 0.85, differentiation: 0.8, ingest: 0.75, carnivory: 0.8, motility: 0.6, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.55, brain: 0.35, covering: 0.32, metamorphosis: 0.8 }),
+  reptile: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.6, size: 0.45, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, brain: 0.4, covering: 0.6, care: 0.3 }),
+  mammal: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.2, motility: 0.7, size: 0.45, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.55, covering: 0.08, care: 0.8 }),
+  bird: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.8, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.5, wings: 0.85, display: 0.7, covering: 0.9, care: 0.85 }),
+  whale: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.8, motility: 0.8, size: 0.85, symmetry: 0.85, segments: 0.2, limbs: 0.3, skeleton: 0.88, landAdapt: 0.5, endothermy: 0.8, brain: 0.6, covering: 0.08, care: 0.9 }),
+  sapient: A({ adhesion: 0.9, differentiation: 0.9, ingest: 0.8, carnivory: 0.5, motility: 0.7, size: 0.5, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.95, covering: 0.08, care: 0.95, sociality: 0.8 }),
 };
 
 // story milestones each new kind of organism completes
@@ -461,7 +500,7 @@ export function storyKeysFor(grade, ph) {
     case 'waterplant': add('landplants'); break;
     case 'grass': case 'cactus': case 'vine': add('landplants', 'forests', 'seeds'); break;
     case 'starfish': add('animals', 'cambrian'); break;
-    case 'arachnid': case 'myriapod': add('animals', 'cambrian', 'landanimals'); break;
+    case 'arachnid': case 'myriapod': case 'socialinsect': add('animals', 'cambrian', 'landanimals'); break;
     case 'snake': case 'turtle': case 'crocodile': case 'dinosaur': case 'pterosaur': add('vertebrates', 'tetrapods', 'amniotes', 'landanimals'); break;
     case 'rodent': case 'ungulate': case 'carnivoran': case 'primate': add('tetrapods', 'amniotes', 'mammals'); break;
     case 'bat': add('tetrapods', 'amniotes', 'mammals'); break;
