@@ -18,7 +18,15 @@ It's a static site with no build step (Three.js is vendored in `vendor/`). ES mo
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000>. URL options:
+Then open <http://localhost:8000>. The game opens on its **main menu**:
+
+- **Play** shows the scenario selector (only *A young planet* for now) with a planet seed.
+- **Continue** picks up the autosave.
+- **Load game**, **🦒 Zoo**, **Options** (kept between visits) and **How to play** are there too.
+
+In a game, `Esc` or the ☰ button opens the pause menu: save, load, options, **End run…** or quit to the main menu.
+
+URL options:
 
 - `?seed=42` picks a specific planet.
 - `&start=microbial` or `&start=oxygen` skips ahead (the default `barren` starts before life).
@@ -39,10 +47,17 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 | `W` | Food web of the zone you inspected (or the one under the cursor) |
 | `Z` | Go in close: watch the animals of the zone you inspected (or the one under the cursor) as individuals |
 | `H` | Help |
+| `Esc` | Clear the selection, or open the pause menu |
 
 The **🌳 Tree of life** button (or `T`) opens a full-screen view. *Major groups* is a spindle diagram: each group's thickness over time is how many species it had. *Species* is the full phylogeny, which you can filter by kingdom or group and zoom in time. Living species are named at the tips.
 
 **Seed life** (`-`) can release any kind of organism, with a preview of the body its genome builds. *Customise* lets you pick its diet, habitat, body size, climate and rainfall (or water depth), and name it.
+
+**The zoo.** Whenever you end a run (pause menu → *End run…*), you can take up to three living species home to your zoo. It is kept in your browser across runs. In the zoo you can:
+
+- watch each creature move in its own enclosure, the way its body lets it (swimming, walking, flying, swaying or dividing);
+- feed it and play with it;
+- open its **full species profile**: genome, body plan, how it lives, its place in the food web, what it was partners or parasites with, the planet it came from, and its ancestry as a chain of body-plan changes back to the first cell.
 
 **Saved worlds** (World tab) keeps three save slots and an autosave in your browser, and can export or import a world as a file.
 
@@ -71,6 +86,10 @@ Everything below emerges from the simulation. Nothing is scripted to happen at a
   - Supercontinents assemble and break apart over hundreds of millions of years.
   - The *Plates* map view shows the plates and volcanic belts.
 
+- **Axial tilt and seasons.** The *Axial tilt* slider (World tab) sets how strong the seasons are. Winters are harshest far inland at high latitudes; the sea softens them. Hardy species weather them better: fur or feathers, seeds and spores, and animals that **migrate**. The *Seasons* map view shows it.
+- **Winds and ocean currents.** Cold currents run up subtropical west coasts and upwelling brings nutrients to the surface there and along the equator, so those seas are rich (think Peru or Namibia), with coastal deserts beside them. East coasts get warm currents. The *Currents* map view shows them.
+- **Rain shadows.** Mountains wring the rain out of the prevailing wind (from the east in the tropics and polar regions, from the west in mid-latitudes), leaving dry land behind them.
+
 ### The origin of life (abiogenesis)
 - **Making organic molecules.** Hydrothermal **vents**, **lightning** in an oxygen-free sky (the Miller–Urey experiment), and **comets** all supply them.
 - **Concentrating them.** Wet–dry cycles in **tidal pools** near coasts concentrate the molecules. Hot water, dry land and oxygen destroy them.
@@ -84,6 +103,7 @@ Each zone holds the biomass of every species living there:
 - **Arms races.** Plants can evolve toxins: they grow more slowly, but most grazers leave them alone. Specialist insects that beat one plant's defences get food nobody else can eat, so new specialists favour toxic plants, one reason insects are so diverse. Grasses regrow from the base and shrug off much of their grazing.
 - **Wildfire.** Once there is about 13% oxygen and plants on land, dry places with plenty of fuel burn now and then. Trees burn; grasses resprout and are good fuel, so grass and fire together can hold back the forest. The *Fire* map view shows where fires burn.
 - **Life histories.** Animals can evolve parental care (few young, well looked after: they survive better and hold their own, but recover more slowly), metamorphosis (larvae and adults live differently, so a species competes less with itself), and social living: colonies with queens and workers in insects (ants, bees and termites, which arise now and then from ordinary insects) and herds and packs in vertebrates.
+- **Realms.** Zones are grouped by the species they share into biogeographic realms (the simulation's version of Earth's Australian or Neotropical realms, and of Wallace's Line), each named after a characteristic species. The *Realms* map view shows them, and the inspector says which realm a zone is in.
 - **The food-web view.** Inspect a zone and press **🕸 Food web** (or `W`) to see who eats whom there, by trophic level, with parasites and partnerships.
 - **Producers** (cyanobacteria, algae, plants) grow logistically and compete for light.
 - **Consumers** feed from shared pools with a saturating (Holling type II) response: chemotrophs on organic molecules, grazers on producers or microbes, predators on grazers, decomposers on dead matter.
@@ -154,7 +174,7 @@ Each tick lasts longer while life is microbial (Hadean, Archean, Proterozoic) an
 index.html          page shell and UI markup
 style.css           styles
 src/rng.js          seeded RNG + 3D Perlin noise
-src/planet.js       geodesic grid, terrain, climate, rivers and lakes, carbon cycle, oxygen, prebiotic chemistry
+src/planet.js       geodesic grid, terrain, climate, winds, currents, seasons, rivers and lakes, carbon cycle, oxygen, prebiotic chemistry
 src/tectonics.js    plate tectonics: drifting plates, mountain building, rifts, supercontinent cycles
 src/genome.js       genes, development (genome → body), naming what evolved, ecology from the body, innovations
 src/sprites.js      procedural organism portraits drawn from each species' genome
@@ -172,6 +192,8 @@ src/tree.js         full-screen tree of life (group spindles + species phylogeny
 src/civ.js          civilization stages and their effects on the planet
 src/save.js         serialize / restore whole worlds (compressed)
 src/storage.js      save slots in IndexedDB, autosave, file export / import
+src/menu.js         main menu, scenarios, options, pause menu, ending a run
+src/zoo.js          the zoo: species snapshots, enclosures, full species profiles
 src/main.js         bootstrap, tools, input, game loop
 tools/headless.mjs  run the simulation in Node without graphics
 tools/sprites.html  a sheet of every kind of organism, for checking the drawings
@@ -192,7 +214,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled, and [IDEAS.md](IDEAS.md) for what's next, including the plan to go deeper than SimEarth.
 
-Next on the list: Earth's geographic patterns (seasons and migration, ocean currents and upwelling, rain shadows, biogeographic realms), then checking the planet against Earth's own diversity patterns.
+Next on the list: checking the planet against Earth's own diversity patterns (the fossil-record curve, the tropics-to-poles gradient, the species–area relationship, body sizes).
 
 ## License
 

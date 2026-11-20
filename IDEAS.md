@@ -102,7 +102,7 @@ Ordered by how much Earth-like variety each adds for the effort.
    - **Plant defences:** plant toxins versus specialist herbivores (why there are so many beetles), and grasses evolving alongside grazers.
    - **Fire:** shaping savannas.
    - **Life histories:** many small offspring or few big ones, parental care, metamorphosis (larva and adult living different lives), social insects.
-5. **Earth's geographic patterns.**
+5. ✅ **Earth's geographic patterns.** (Built; migration is a hardiness gene rather than seasonal movement between zones.)
    - **Seasons and axial tilt:** migration and hibernation.
    - **Ocean currents and upwelling:** rich coasts and coral hotspots.
    - **Rain shadows:** behind mountain ranges.

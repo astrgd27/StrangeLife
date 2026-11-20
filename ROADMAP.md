@@ -82,7 +82,17 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
   - `Ecosystem.wildfires()`: every 10 ticks, dry land zones burn with a chance set by oxygen (from ~13%), dryness and fuel (grass counts double). Each species keeps a share by `tFire` (grasses and animals mostly survive, trees mostly burn); ash returns nutrients. `zFire` drives the Fire map view.
   - Genes `care`, `metamorphosis`, `sociality` (animals) change conversion efficiency, mortality, self-limitation, dispersal, feeding and defences in `ecology()`. Social insects are their own group, arise now and then from land insects, and speciate more slowly (few breeders).
 
+## 13. Earth's geographic patterns
+- **Real:** tilt makes seasons, and winters are harshest inside big continents at high latitudes, so species there hibernate, insulate or migrate. Cold currents and upwelling off subtropical west coasts make some of the richest seas on Earth beside coastal deserts. Mountains cast rain shadows. And because continents have been apart for a long time, each has its own fauna: Wallace's biogeographic realms.
+- **Game:**
+  - `Planet.computeWindsAndCurrents()` (run with `computeBase`): walks each coast east and west to find its ocean side. Subtropical west coasts get cold currents and upwelling (`upwell`, `current`), sea temperatures fall and the coast dries; east coasts are warmed; the equator upwells a little. Sea carrying capacity rises with upwelling.
+  - Rain shadows: each land cell looks upwind (easterlies below 30° and above 62°, westerlies between) for mountains and loses rainfall behind them.
+  - `season[i]` from tilt, latitude and distance from the sea. `Ecosystem.updateEnvironment` turns it into `zSeason`, which adds winter mortality scaled by `1 − tHardy` (hardiness from kingdom, covering, endothermy, and the `migration` gene).
+  - `Ecosystem.computeRealms()`: k-means on the lists of complex species in each zone, separately for land and sea, recomputed when the Realms view is shown; each realm is named after its most characteristic species.
+  - Map views Currents, Seasons, Realms (and Fire) with legends.
+
 ## Also built
+- A main menu with a scenario selector, options, load and continue, a pause menu (`menu.js`), and ending a run to take up to three species to the **zoo** (`zoo.js`): enclosures you can feed and play with, and full species profiles with ancestry
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)
 - Civilization stages after intelligence (`civ.js`)
 - Saving and loading worlds (`save.js`, `storage.js`) and the organism designer (Seed life → Customise)
