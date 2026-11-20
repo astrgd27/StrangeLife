@@ -63,10 +63,12 @@ SimEarth (1990) gave life a fixed menu: about 15 predefined groups, each moving 
 - **Hybridisation and gene flow** between related species, ring species, and **horizontal gene transfer** in microbes (how bacteria share antibiotic resistance).
 - **Molecular clocks.** The game can reconstruct the tree of life from genomes alone, the way biologists do, and compare it with the true history. That shows where real methods get fooled.
 
-### D. Zoom from planet to individual ⭐
+### D. Zoom from planet to individual ✅ built (first version)
 - **Multi-scale simulation.** At planet scale, life stays as populations. Zoom into one zone and the game switches to **individual creatures** with tiny evolving brains (neural networks) that forage, flee, court and cooperate.
 - Their behaviour is real evolution in miniature (like the Primer and Bibites simulations), and the fitness measured there feeds back into the planet-scale model.
 - This is where behaviour evolves: herding, warning colours and mimicry, camouflage that matches the local ground, mating displays, parental care.
+
+**What was built (D):** *Go in close* turns a zone's animals into individuals with inherited, mutating neural-network brains. Foraging, hunting, escape and herding or schooling evolve under real selection (crowds confuse predators; sexual species need to meet), and improvements carry back to the species planet-wide. Still to do: warning colours and mimicry, camouflage, mating displays, parental care, and behaviour evolving in the background for zones you aren't watching.
 
 ### E. Explicit food webs and ecosystem function
 - **Feeding links instead of food pools.** Each species eats specific others, decided by size, defences and habitat, so you can watch keystone species, trophic cascades (wolves → deer → forests) and invasive species when continents collide.
@@ -84,7 +86,7 @@ SimEarth (1990) gave life a fixed menu: about 15 predefined groups, each moving 
 
 ### Suggested path
 1. ✅ **A + B: genome-built bodies and emergent groups.** The biggest single step past SimEarth, and it makes every planet's tree of life unique and visible.
-2. **D: zoom to individuals in one zone.** Where behaviour and the "wow" moments live.
+2. ✅ **D: zoom to individuals in one zone.** Where behaviour and the "wow" moments live.
 3. **E: explicit food webs.** Deeper ecology, built on the genome traits from step 1.
 4. **G: laboratory tools.** Cheap to add once 1–3 exist, and they turn the game into real science.
 5. **C and F** layered in as the systems mature.

@@ -6,6 +6,8 @@ You start with a newborn planet: scalding seas under a thick CO₂ sky, a dim yo
 
 Every species carries a **genome that builds its body**. Cells, symmetry, segments, legs, shells, bones, wings and brains come from genes, and each species is drawn from its own genome on the globe and in the tree of life. New body plans appear when mutations produce them and survive only if the planet rewards them, so every world grows its own tree of life. Groups can evolve more than once, from different ancestors, or never.
 
+**Go in close.** Click a zone, then *Go in close* (or press `Z`, or *Watch it up close* on any animal in the Life list). The zone's animals become individuals, each with a tiny brain: a neural network it inherits, with mutations, from its parents. They smell out food, stalk prey, flee predators, find mates, breed and die, so behaviour evolves while you watch: foraging, hunting, escape, and herds or schools where crowds confuse predators. Follow any creature to see its brain fire. When you go back to the planet, each species keeps what it learned, and it feeds and survives better everywhere.
+
 **[StrangeLife Classic](classic/)**, the simpler original with a fixed ladder of transitions, is still playable from `classic/` (and the `classic` branch).
 
 ## Play
@@ -34,6 +36,7 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 | `Space` | Pause / resume |
 | `[` `]` | Slower / faster |
 | `T` | Tree of life |
+| `Z` | Go in close: watch the animals of the zone you inspected (or the one under the cursor) as individuals |
 | `H` | Help |
 
 The **🌳 Tree of life** button (or `T`) opens a full-screen view. *Major groups* is a spindle diagram: each group's thickness over time is how many species it had. *Species* is the full phylogeny, which you can filter by kingdom or group and zoom in time. Living species are named at the tips.
@@ -99,6 +102,7 @@ Each zone holds the biomass of every species living there:
   - **Ecology follows from the body:** oxygen need, growth, feeding, metabolism (Kleiber scaling), dispersal, climate tolerance, drought, and how hard it is to catch (size, armour, speed and wings protect prey, and predators take the easiest prey first).
 - **Groups emerge.** "Fish", "insects" or "conifers" are just the nearest description of what evolved (`classify`), shown with each species' own procedurally drawn portrait (`sprites.js`). A group can evolve several times from different ancestors (**convergent evolution**), or never.
 - **Developmental innovations.** Now and then a lineage produces a mutant with a big change in one gene its body plan can easily alter: another segment, a lost shell, legs, a bigger brain (evo-devo). Key innovations, once gained, are entrenched, and a backbone is never lost. Most mutants fail; the few that fit the planet found new kinds of life. Shores are where life rehearses for land: shore populations are selected for drought resistance.
+- **Behaviour evolves in individuals** (`brain.js`, `microcosm.js`). Up close, each animal has a 10-input, 6-neuron, 3-output neural network: the smell of food, the nearest danger and prey, nearby kin and hunger steer where it goes and how fast. Brains are inherited with mutations (and mixed between parents in sexual species). Predators single out prey less easily in a crowd, and sexual species must meet to breed, so herding and schooling can evolve. A species keeps a newly evolved brain only if it's an improvement. Its skills then change its planet-wide feeding rate and how easily it's caught, and pass to daughter species.
 - **Mergers** are the only scripted transitions, because genes alone can't make them:
 
 | Merger | What it needs |
@@ -135,6 +139,9 @@ src/planet.js       geodesic grid, terrain, climate, carbon cycle, oxygen, prebi
 src/tectonics.js    plate tectonics: drifting plates, mountain building, rifts, supercontinent cycles
 src/genome.js       genes, development (genome → body), naming what evolved, ecology from the body, innovations
 src/sprites.js      procedural organism portraits drawn from each species' genome
+src/brain.js        tiny evolving neural-network brains, and reading behaviour from them
+src/microcosm.js    one zone simulated as individual animals with brains
+src/zoneview.js     the up-close view of a zone
 src/ecosystem.js    zones, species, niches, population ecology, dispersal, speciation, mergers
 src/world.js        planet + ecosystem, abiogenesis, eons, natural events, history, milestones
 src/science.js      the story of life: real-science notes for each transition
@@ -148,6 +155,7 @@ src/storage.js      save slots in IndexedDB, autosave, file export / import
 src/main.js         bootstrap, tools, input, game loop
 tools/headless.mjs  run the simulation in Node without graphics
 tools/sprites.html  a sheet of every kind of organism, for checking the drawings
+tools/microcosm.mjs run one zone of individuals headless and report how behaviour evolved
 classic/            StrangeLife Classic, the original version with a fixed ladder of transitions
 vendor/             three.js r160 + OrbitControls (MIT)
 ```
@@ -164,7 +172,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled, and [IDEAS.md](IDEAS.md) for what's next, including the plan to go deeper than SimEarth.
 
-Next on the list: zooming into one zone to watch individual creatures with evolved behaviour, and explicit food webs built on the genome traits.
+Next on the list: explicit food webs built on the genome traits, and laboratory tools (replaying the tape of life, diversity curves, exporting data).
 
 ## License
 

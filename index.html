@@ -171,6 +171,33 @@
 
 <section class="inspector" id="inspector" hidden></section>
 
+<section class="zoneview" id="zoneview" hidden aria-label="Zone up close">
+  <header class="tree-head">
+    <div class="tree-title">
+      <h2 id="zone-title">Up close</h2>
+      <p class="muted small"><span id="zone-sub"></span> · <span id="zone-clock" class="mono"></span></p>
+    </div>
+    <div class="tree-controls">
+      <div class="seg" role="group" aria-label="Speed">
+        <button data-zspeed="0" title="Pause">❚❚</button>
+        <button data-zspeed="1">1×</button>
+        <button data-zspeed="2">5×</button>
+        <button data-zspeed="3">20×</button>
+      </div>
+      <button class="primary" id="zone-close" title="Back to the planet (Esc)">Back to the planet</button>
+    </div>
+  </header>
+  <div class="zone-body">
+    <div class="zone-stage"><canvas id="zone-canvas"></canvas>
+      <p class="zone-empty muted" id="zone-empty" hidden>No animals live in this zone yet. Try a zone where the Life list shows animals.</p></div>
+    <aside class="zone-side">
+      <p class="muted small zone-intro">Each animal here is an individual with a tiny brain (a neural network) that it inherits, with mutations, from its parents. Those that find food, catch prey, escape and find mates leave more young, so behaviour evolves as you watch. The planet waits; when you go back, what each species learned changes how it does everywhere.</p>
+      <div class="zone-selected" id="zone-selected"></div>
+      <ol class="zone-species" id="zone-species"></ol>
+    </aside>
+  </div>
+</section>
+
 <section class="treeview" id="treeview" hidden aria-label="Tree of life">
   <header class="tree-head">
     <div class="tree-title">
@@ -229,6 +256,7 @@
       <li><b>Look around.</b> Drag to spin the planet. Scroll or pinch to zoom in. Icons show what lives in each region.</li>
       <li><b>Kindle life.</b> Life needs liquid water, warm shallow seas and organic molecules. Volcanic vents, lightning and comets make them. The <i>Planet</i> tab tracks your progress.</li>
       <li><b>Watch it evolve.</b> Every species has a genome that builds its body: cells, symmetry, segments, legs, shells, bones, wings, a brain. Mutations invent new body plans, and the planet decides which survive, so no two worlds grow the same tree of life.</li>
+      <li><b>Go in close.</b> Inspect a zone and press <kbd>Z</kbd> to watch its animals as individuals whose small brains evolve: foraging, hunting, fleeing, herding.</li>
       <li><b>Meddle.</b> Raise continents, warm or freeze the climate, seed organisms, or drop an asteroid and see who survives.</li>
     </ul>
     <p class="muted small">With a terraforming tool selected, left-drag paints and right-drag spins. Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd>, <kbd>-</kbd>, <kbd>=</kbd> tools, <kbd>Space</kbd> pause, <kbd>[</kbd> <kbd>]</kbd> speed, <kbd>T</kbd> tree of life.</p>

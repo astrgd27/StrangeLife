@@ -439,3 +439,35 @@ input[type='range'] { accent-color: var(--sun); width: 100%; }
 
 .d-preview { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
 .d-preview canvas { width: 64px; height: 64px; flex: none; border-radius: 12px; background: radial-gradient(circle at 50% 40%, rgba(120,160,220,.16), rgba(8,12,22,.5)); }
+
+/* zone up close: individuals with evolving brains */
+.zoneview {
+  position: fixed; inset: 0; z-index: 10; display: grid; grid-template-rows: auto 1fr;
+  background: var(--void);
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.zone-body { display: grid; grid-template-columns: minmax(0, 1fr) 330px; min-height: 0; }
+.zone-stage { position: relative; min-height: 0; }
+.zone-stage canvas { display: block; position: absolute; inset: 0; cursor: pointer; touch-action: none; }
+.zone-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; }
+.zone-side { border-left: 1px solid var(--line); overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.zone-intro { margin: 0; }
+.zone-species { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.zone-species li { display: grid; grid-template-columns: 40px 1fr; gap: 8px; padding: 6px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; }
+.zone-species li:hover { background: rgba(255, 255, 255, 0.04); }
+.zone-species li.active { border-color: var(--sun); background: rgba(255, 255, 255, 0.05); }
+.zone-species img { border-radius: 8px; background: rgba(8, 12, 22, 0.5); }
+.zone-species .nm, .zone-selected .nm { font-size: 13px; }
+.zskills { display: grid; gap: 2px; margin-top: 4px; }
+.zs { display: grid; grid-template-columns: 70px 1fr; gap: 6px; align-items: center; font-size: 10.5px; color: var(--ink-dim); }
+.znotes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.zone-selected { border-bottom: 1px solid var(--line); padding-bottom: 10px; display: grid; gap: 4px; }
+.zone-selected canvas { width: 100%; height: auto; background: rgba(8, 12, 22, 0.5); border-radius: 10px; margin-top: 4px; }
+.zone-selected p { margin: 0; }
+@media (max-width: 760px) {
+  .zone-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 42%); }
+  .zone-side { border-left: 0; border-top: 1px solid var(--line); }
+  .zone-intro { display: none; }
+}
+.dive-btn { margin-top: 8px; width: 100%; }
+body.zone-open .card, body.zone-open .toasts { z-index: 12; }

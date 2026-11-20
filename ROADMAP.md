@@ -50,6 +50,13 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
   - Shore populations are selected for drought resistance (`LAND_TARGET`), so land is colonised from the coasts.
   - `sprites.js` draws every species from its genome: on the globe, in the Life panel, in the tree of life and on discovery cards.
 
+## 8. Behaviour evolving in individuals
+- **Real:** behaviour is heritable and evolves. Herding and schooling protect prey because predators struggle to single one out of a crowd (the confusion and dilution effects). Foraging and hunting strategies are honed by selection.
+- **Game:**
+  - `brain.js`: each animal's brain is a small neural network (senses → 6 neurons → steering and speed). `probe()` reads a brain's skills (foraging, hunting, escaping, herding) by showing it stimuli from every direction.
+  - `microcosm.js`: one zone as individuals that eat, hunt, flee, find mates, breed with inherited and mutated brains, and die. Crowds lower each animal's chance of being caught, and sexual species need a partner nearby.
+  - Leaving the zone (`writeBack`): each species keeps the brain of its most successful individual if its skills improved. `Ecosystem.setParams` turns the skills into a better feeding rate and lower vulnerability across the planet, and daughter species inherit the brain.
+
 ## Also built
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)
 - Civilization stages after intelligence (`civ.js`)

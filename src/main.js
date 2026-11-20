@@ -5,7 +5,8 @@ import { World } from './world.js';
 import { Renderer } from './render.js';
 import { UI } from './ui.js';
 import { TreeView } from './tree.js';
-import { GRADES, GRADE_KEYS, previewSpecies } from './ecosystem.js';
+import { ZoneView } from './zoneview.js';
+import { GRADES, GRADE_KEYS, MAXT, previewSpecies } from './ecosystem.js';
 import { drawOrganism } from './sprites.js';
 import { SLOTS, listSaves, saveToSlot, loadFromSlot, exportWorld, importWorld, describeSave } from './storage.js';
 
@@ -32,7 +33,33 @@ let seed = +params.get('seed') || Math.floor(Math.random() * 99999) + 1;
 let scenario = params.get('start') || 'barren';
 let world = new World(seed, { scenario });
 const renderer = new Renderer($('view'), world);
-const ui = new UI(renderer);
+const ui = new UI(renderer, {
+  dive: (z) => openZone(z),
+  // the zone where a species is most abundant
+  watch: (sp) => {
+    const E = world.eco;
+    let best = -1, bb = 0;
+    for (let z = 0; z < E.Z; z++) { const b = E.B[z * MAXT + sp.slot]; if (b > bb) { bb = b; best = z; } }
+    if (best >= 0) openZone(best);
+  },
+});
+const zone = new ZoneView({
+  toast: (t) => ui.toast(t, 'star'),
+  onClose: (changes) => {
+    renderer.updateIcons();
+    for (const c of changes) {
+      if (c.behaviours.length) ui.chronicle(world.tick, `🧠 Watched up close, ${c.sp.name} evolved new behaviour: it ${c.behaviours.join(', ')}.`);
+    }
+    const n = changes.length;
+    if (n) ui.toast(`🧠 What ${n} species learned now shapes ${n === 1 ? 'its' : 'their'} populations across the planet.`, 'star');
+    ui.renderLife();
+  },
+});
+function openZone(z) {
+  if (tree.isOpen) tree.toggle(false);
+  zone.open(world, z);
+  ui.firstCard('behaviour');
+}
 ui.setWorld(world);
 const tree = new TreeView({ highlight: (sp) => { ui.setHighlight(sp); ui.showTab('life'); } });
 tree.setWorld(world);
@@ -251,7 +278,9 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === ' ') { e.preventDefault(); if (speed) { lastSpeed = speed; setSpeed(0); } else setSpeed(lastSpeed || 2); }
   else if (e.key === ']') setSpeed(speed + 1);
   else if (e.key === '[') setSpeed(speed - 1);
+  else if (zone.isOpen) { if (e.key === 'Escape') zone.close(); return; }
   else if (e.key === 't' || e.key === 'T') tree.toggle();
+  else if ((e.key === 'z' || e.key === 'Z') && (ui.inspectCell >= 0 || hoverCell >= 0)) openZone(world.eco.zoneOf[ui.inspectCell >= 0 ? ui.inspectCell : hoverCell]);
   else if (e.key === 'Escape' && tree.isOpen) tree.toggle(false);
   else if (e.key === 'Escape') { setTool('inspect'); $('intro').hidden = true; if (renderer.highlight) ui.setHighlight(null); }
   else if (e.key === 'h' || e.key === 'H') $('intro').hidden = !$('intro').hidden;
@@ -382,6 +411,8 @@ let lastTerrain = world.planet.terrainVersion;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  // up close in a zone: the planet waits
+  if (zone.isOpen) { zone.update(dt, now); ui.update(now); requestAnimationFrame(frame); return; }
   acc += dt * SPEEDS[speed];
   const t0 = performance.now();
   const budget = speed >= 4 ? 22 : 14; // ms of simulation per frame
@@ -411,4 +442,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // expose for debugging in the console
-window.strangelife = { get world() { return world; }, renderer, ui, tree };
+window.strangelife = { get world() { return world; }, renderer, ui, tree, zone };

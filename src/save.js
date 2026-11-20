@@ -46,7 +46,7 @@ export function serialize(world, meta = {}) {
   // biomass is mostly empty: store only occupied entries
   const idx = [], val = [];
   for (let i = 0; i < E.B.length; i++) if (E.B[i] > 0) { idx.push(i); val.push(E.B[i]); }
-  const species = [...E.species.values()].map((sp) => ({ ...scalars(sp, ['_p', 'body']), genes: Array.from(sp.genes) }));
+  const species = [...E.species.values()].map((sp) => ({ ...scalars(sp, ['_p', 'body']), genes: Array.from(sp.genes), brain: sp.brain ? Array.from(sp.brain) : undefined }));
   return {
     version: SAVE_VERSION,
     meta: { savedAt: new Date().toISOString(), years: world.years, eon: world.eon, species: E.alive.length, ...meta },
@@ -115,6 +115,7 @@ export function deserialize(data) {
   E.slots.fill(null);
   for (const sp of species) {
     sp.genes = Float32Array.from(sp.genes);
+    if (sp.brain) sp.brain = Float32Array.from(sp.brain);
     E.species.set(sp.id, sp);
     E.develop(sp); // rebuild the body from the genome
   }

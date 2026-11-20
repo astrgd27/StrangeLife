@@ -5,6 +5,8 @@ import { EONS, formatYears } from './world.js';
 import { STORY, EVENTS, storyByKey } from './science.js';
 import { CIV_STAGES } from './civ.js';
 import { spriteURL } from './sprites.js';
+import { behaviours } from './brain.js';
+import { dietOf } from './microcosm.js';
 import { GENES, GENE_INFO, GI } from './genome.js';
 
 // the genes worth showing for each kind of body (others are switched off or don't matter)
@@ -61,6 +63,8 @@ export class UI {
       $('btn-collapse').title = p.classList.contains('collapsed') ? 'Show panel' : 'Hide panel';
     });
     const pickSpecies = (e) => {
+      const watch = e.target.closest('[data-watch]');
+      if (watch) { e.stopPropagation(); this.hooks.watch?.(this.world.eco.species.get(+watch.dataset.watch)); return; }
       const el = e.target.closest('[data-sp]');
       if (!el) return;
       const sp = this.world.eco.species.get(+el.dataset.sp);
@@ -80,6 +84,7 @@ export class UI {
     });
     $('inspector').addEventListener('pointerdown', (e) => {
       if (e.target.closest('[data-act=close]')) { this.inspectCell = -1; $('inspector').hidden = true; return; }
+      if (e.target.closest('[data-act=dive]')) { this.hooks.dive?.(this.world.eco.zoneOf[this.inspectCell]); return; }
       pickSpecies(e);
     });
     $('card-close').addEventListener('click', () => this.nextCard());
@@ -306,7 +311,9 @@ export class UI {
           <dt>Needs O₂</dt><dd>${sp.eco?.o2 ? `${sp.eco.o2.toFixed(1)}% or more` : 'none (anaerobic)'}</dd>
           ${sp.trophic !== 1 && sp.eco && sp.ph?.animal ? `<dt>Defences</dt><dd>${defenceText(sp)}</dd>` : ''}
           <dt>Reproduction</dt><dd>${sp.sexual ? 'Sexual' : 'Asexual (cloning or splitting)'}</dd>
-        </dl>`;
+          ${sp.ph?.animal ? `<dt>Behaviour</dt><dd>${behaviourText(sp)}</dd>` : ''}
+        </dl>
+        ${sp.ph?.animal ? `<button class="primary small-btn" data-watch="${sp.id}">🔬 Watch it up close</button>` : ''}`;
       }
       return `<li class="sp${active ? ' active' : ''}" data-sp="${sp.id}">
         ${badge(sp)}
@@ -458,7 +465,8 @@ export class UI {
         ${d.water ? `<dt>Organics</dt><dd>${d.organics.toFixed(2)}${d.volc > 0.3 ? ' · hydrothermal vents' : ''}</dd>` : d.volc > 0.4 ? '<dt>Geology</dt><dd>volcanic</dd>' : ''}
       </dl>
       <hr><div class="sub">${d.life.length ? `Life in this zone (${d.life.length} species)` : 'No life in this zone yet.'}</div>
-      <ol class="zone-life">${life}</ol>`;
+      <ol class="zone-life">${life}</ol>
+      ${d.life.some(({ sp }) => sp.ph?.animal) ? '<button class="primary small-btn dive-btn" data-act="dive">🔬 Go in close: watch the animals (Z)</button>' : ''}`;
     el.hidden = false;
     if (narrow()) $('panel').classList.add('collapsed');
   }
@@ -551,4 +559,11 @@ function defenceText(sp) {
   if (ph.motile && ph.motility > 0.6) out.push('fast');
   const v = sp.eco.vuln;
   return `${out.length ? out.join(', ') + ' · ' : ''}${v > 0.6 ? 'easy prey' : v > 0.35 ? 'hard to catch' : 'very hard to catch'}`;
+}
+
+function behaviourText(sp) {
+  if (dietOf(sp).filter) return 'Sits still and filters food from the water';
+  if (!sp.brain || !sp.skills) return '<span class="muted">Instinct only. Watch it up close and its behaviour will evolve.</span>';
+  const b = behaviours(sp.skills, dietOf(sp));
+  return `${b.length ? b.join(', ') : 'no special behaviour yet'}${sp.brainGens ? ` <span class="muted">(evolved over ${sp.brainGens} generations watched)</span>` : ''}`;
 }

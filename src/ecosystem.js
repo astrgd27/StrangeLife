@@ -20,6 +20,7 @@
 import { makeGeodesicGrid } from './planet.js';
 import { gaussian } from './rng.js';
 import { genusName, speciesEpithet } from './names.js';
+import { probe } from './brain.js';
 import { GI, ARCHETYPES, develop, classify, ecology, mutate, innovate, evolvable, makeGenes, setDiet, storyKeysFor, describe } from './genome.js';
 
 export const ZONE_LEVEL = 4;
@@ -302,6 +303,8 @@ export class Ecosystem {
       parent: parent ? parent.id : 0, born: this.tick, bornYears: opts.years ?? 0, died: -1,
       total: 0, range: 0, peak: 0, peakRange: 0, seeded: !!opts.seeded,
     };
+    // learned behaviour is inherited by daughter species
+    if (parent?.brain) { sp.brain = Float32Array.from(parent.brain); sp.brainGens = parent.brainGens; }
     // has this lineage ever lived on land? (so a warm-blooded sea creature can be a whale)
     sp.landAnc = parent ? !!parent.landAnc || sp.habitat === 2 : sp.habitat === 2 || LAND_GROUPS.has(grade);
     this.develop(sp);
@@ -348,6 +351,14 @@ export class Ecosystem {
     this.tM[s] = p.m; this.tE[s] = p.e; this.tImax[s] = p.imax; this.tHalf[s] = p.half;
     this.tO2[s] = p.o2; this.tDisp[s] = p.disp; this.tSelf[s] = p.self * (sp.sexual ? 0.75 : 1);
     this.tDry[s] = p.dry; this.tVuln[s] = p.vuln;
+    // behaviour evolved by individuals (when you dive into a zone): better foragers and hunters
+    // eat more, and animals that flee or crowd together are harder to catch
+    if (sp.brain && ph.animal) {
+      const k = sp.skills || (sp.skills = probe(sp.brain));
+      const f = sp.trophic === T.PREDATOR ? k.hunt : sp.trophic === T.OMNI ? Math.max(k.hunt, k.forage) : k.forage;
+      this.tImax[s] *= Math.max(0.85, Math.min(1.2, 1 + 0.35 * (f - 0.4)));
+      this.tVuln[s] *= Math.max(0.7, Math.min(1.15, 1 - 0.35 * (k.evade - 0.3) - (k.herd > 0.3 ? 0.1 : 0)));
+    }
     // specialists are efficient on their one host plant and can't use anything else
     const host = sp.host ? this.species.get(sp.host) : null;
     this.tHost[s] = host && host.died < 0 ? host.slot : -1;
