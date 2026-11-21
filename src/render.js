@@ -10,7 +10,7 @@ import { makeNoise3, mulberry32 } from './rng.js';
 const LAND_H = 0.045;  // terrain exaggeration above sea level
 const SEA_H = 0.03;    // depth exaggeration below
 const ATLAS_GRID = 16; // icons per atlas row
-const ATLAS_CELL = 64;
+const ATLAS_CELL = 128; // big enough for the largest icon on a high-density screen
 
 export function surfaceRadius(e) {
   return 1 + (e > 0 ? e * LAND_H : e * SEA_H);

@@ -88,8 +88,9 @@ export function randomLooks(genes, rng) {
 
 // Markings, in gene order. Ornaments (or, for plants, fungi and microbes, the form they take)
 // depend on the body plan: the same gene grows a crest on a bird and antlers on a deer.
-export const PATTERNS = ['plain', 'spots', 'stripes', 'bands', 'mottled', 'dark back', 'eyespots'];
-const PAT_EDGES = [0.2, 0.34, 0.48, 0.6, 0.72, 0.86];
+export const PATTERNS = ['plain', 'spots', 'stripes', 'bands', 'mottled', 'dark back', 'eyespots', 'rosettes', 'chevrons', 'patches', 'speckles', 'two-tone', 'saddle'];
+const PAT_EDGES = PATTERNS.slice(1).map((_, i) => 0.14 + (0.86 * i) / (PATTERNS.length - 1));
+const PATTERN_WORDS = { 'dark back': 'dark-backed', saddle: 'saddled', speckles: 'speckled', patches: 'patchy', chevrons: 'chevroned', 'two-tone': 'two-toned' };
 export const ORNAMENTS = {
   fish: ['a sail fin', 'streamer fins', 'barbels', 'spiny fins', 'a sword', 'a lure'],
   whale: ['a tall fin', 'long flippers', 'a tusk', 'a hump'],
@@ -157,6 +158,8 @@ export function looks(sp) {
     ornament: list && (form || orn > 0.2) ? list[oi] : null, oi: list && (form || orn > 0.2) ? oi : -1, orn, form,
     build: G('build'), snout: G('snout'), reach: G('reach'), tail: G('tail'),
     hue: G('hue'), accent: G('accent'), shade: G('shade'), showy: G('display') > 0.55,
+    // a metallic, iridescent sheen in some showy species (beetles, hummingbirds, sunbirds, fish)
+    sheen: G('display') > 0.6 && G('shade') > 0.5 && (G('accent') * 7) % 1 < 0.35,
   };
 }
 
@@ -201,7 +204,8 @@ export function describeLooks(sp) {
       if (L.tail > 0.78) parts.push('long-tailed');
     } else if (ph.skeleton === 'exo' && ph.limbs && L.reach > 0.75) parts.push('long-legged');
   }
-  if (L.pattern !== 'plain' && (ph.animal || sp.grade === 'mushroom')) parts.push(`${L.patSize > 0.65 ? 'bold ' : L.patSize < 0.3 ? 'fine ' : ''}${L.pattern === 'dark back' ? 'dark-backed' : L.pattern}`);
+  if (L.pattern !== 'plain' && (ph.animal || sp.grade === 'mushroom')) parts.push(`${L.patSize > 0.65 ? 'bold ' : L.patSize < 0.3 ? 'fine ' : ''}${PATTERN_WORDS[L.pattern] || L.pattern}`);
+  if (L.sheen && ph.animal) parts.push('iridescent');
   if (L.ornament) {
     const o = L.ornament.replace(/^an? /, '');
     parts.push(L.form ? L.ornament : L.orn > 0.55 && !/^(big|long|tall|high) /.test(o) ? `big ${o}` : o);

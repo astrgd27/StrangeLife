@@ -98,9 +98,10 @@ export class ZoneView {
     this.sel = best;
   }
 
-  sprite(sp, px = 64) {
+  sprite(sp) {
     let c = this.sprites.get(sp.id);
     if (c) return c;
+    const px = Math.round(80 * Math.min(2, window.devicePixelRatio || 1));
     c = document.createElement('canvas');
     c.width = c.height = px;
     drawOrganism(c.getContext('2d'), sp, px / 2, px / 2, px * 0.45);
@@ -136,7 +137,7 @@ export class ZoneView {
       const sp = list[(gx * 7 + gy * 13) % list.length];
       const s = 10 + 22 * Math.min(1, f);
       ctx.globalAlpha = Math.min(1, 0.25 + f);
-      ctx.drawImage(this.sprite(sp, 48), x - s / 2 + ((gy * 37) % 9) - 4, y - s / 2 + ((gx * 23) % 9) - 4, s, s);
+      ctx.drawImage(this.sprite(sp), x - s / 2 + ((gy * 37) % 9) - 4, y - s / 2 + ((gx * 23) % 9) - 4, s, s);
     }
     ctx.globalAlpha = 1;
   }

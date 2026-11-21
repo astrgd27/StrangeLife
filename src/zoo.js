@@ -311,8 +311,9 @@ class Pen {
     this.face = 1; this.jump = 0; this.spin = 0; this.food = []; this.fx = []; this.split = 0;
     // a cached picture of the creature
     this.img = document.createElement('canvas');
-    this.img.width = this.img.height = 128;
-    drawOrganism(this.img.getContext('2d'), this.sp, 64, 64, 56);
+    // drawn at the pen's full size on this screen, so it stays sharp
+    this.img.width = this.img.height = 320;
+    drawOrganism(this.img.getContext('2d'), this.sp, 160, 160, 140);
   }
 
   size() {
