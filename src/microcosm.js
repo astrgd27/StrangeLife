@@ -9,6 +9,7 @@
 
 import { makeBrain, think, mutateBrain, crossBrains, probe, behaviours, NI, NO } from './brain.js';
 import { mulberry32, gaussian } from './rng.js';
+import { colouration, lookSimilarity } from './genome.js';
 
 export const MW = 1000, MH = 640;
 const CELL = 25, GW = MW / CELL, GH = Math.ceil(MH / CELL);
@@ -92,6 +93,9 @@ export class Microcosm {
         vuln: sp.eco?.vuln ?? 0.5,
         edible: E.tPool[sp.slot] === 2 || diet.filter,
         notes: new Set(), skills: null,
+        // how it looks to a predator: poisonous, conspicuous, camouflaged
+        col: colouration(sp) || { tox: 0, conspic: 0, crypsis: 0, warning: 0 },
+        spat: 0, spared: 0, mistaken: 0, sickened: 0, learnedBy: new Set(), learned: new Set(),
       };
       g.skills = probe(g.brain);
       g.startSkills = g.skills;
@@ -138,6 +142,8 @@ export class Microcosm {
       energy, age: 0, brain, gen, kids: 0, alive: true, act: 'wandering',
       kin: 0, threat: null, prey: null, mate: null,
       inp: new Float32Array(NI), out: new Float32Array(NO),
+      // a predator's memory of prey that made it sick (by their looks), and how bold it is
+      memory: [], sick: 0, bold: 0.35 + 0.45 * this.rng(),
     };
     this.agents.push(a);
     g.count++;
@@ -147,6 +153,39 @@ export class Microcosm {
 
   canEat(A, B) {
     return A.g.diet.hunt && A.g !== B.g && B.g.edible && B.g.r <= A.g.r * 1.5;
+  }
+
+  // how alike two species look (cached)
+  sim(g1, g2) {
+    if (g1 === g2) return 1;
+    const key = g1.sp.id < g2.sp.id ? `${g1.sp.id}|${g2.sp.id}` : `${g2.sp.id}|${g1.sp.id}`;
+    let v = (this.simCache ||= new Map()).get(key);
+    if (v === undefined) { v = lookSimilarity(g1.sp, g2.sp); this.simCache.set(key, v); }
+    return v;
+  }
+  // how strongly a predator avoids a prey animal because it looks like something that made it sick
+  aversion(a, b) {
+    let best = 0, from = null;
+    for (const m of a.memory) { const v = m.s * Math.max(0, (this.sim(b.g, m.g) - 0.45) / 0.55); if (v > best) { best = v; from = m.g; } }
+    return [best, from];
+  }
+
+  // a predator eats (or tries to eat) poisonous prey: it gets sick, often spits the prey out, and
+  // remembers what it looked like, faster if it was conspicuous
+  tasted(a, B) {
+    const c = B.g.col;
+    a.energy -= 0.55 * c.tox;
+    a.sick = 2 + 4 * c.tox;
+    B.g.sickened++;
+    const learn = c.tox * (0.3 + 0.6 * c.conspic);
+    let m = a.memory.find((q) => q.g === B.g);
+    if (!m) { m = { g: B.g, s: 0 }; a.memory.push(m); if (a.memory.length > 3) a.memory.shift(); }
+    m.s = Math.min(1, m.s + learn);
+    if (m.s > 0.5 && !B.g.learnedBy.has(a.g)) {
+      B.g.learnedBy.add(a.g); a.g.learned.add(B.g);
+      this.events.push({ g: a.g, msg: `🤢 ${a.g.sp.name} learns to leave the poisonous ${B.g.sp.name} alone${c.conspic > 0.5 ? ': its warning colours are easy to remember' : ''}.` });
+    }
+    return this.rng() < 0.6 * c.tox; // spat out alive
   }
 
   die(a, why) {
@@ -177,6 +216,9 @@ export class Microcosm {
       if (!a.alive) continue;
       const g = a.g;
       a.age += dt;
+      if (a.sick > 0) a.sick -= dt;
+      // memories fade slowly
+      for (const m of a.memory) m.s *= 1 - dt / 240;
       if (g.vmax > 0) {
         const o = a.out;
         let sx = o[0], sy = o[1];
@@ -216,10 +258,13 @@ export class Microcosm {
           // crowds confuse predators: each nearby relative makes a prey animal harder to single out
           const p = dt * 5 * B.g.vuln / (1 + 0.4 * B.kin);
           if (rng() < p) {
-            this.die(B, 'eaten');
-            a.energy = Math.min(3, a.energy + 0.5 + B.g.r / 25);
-            g.food += 1;
-            a.act = 'feeding';
+            if (B.g.col.tox > 0.15 && this.tasted(a, B)) { B.g.spat++; a.prey = null; a.act = 'spitting it out'; }
+            else {
+              this.die(B, 'eaten');
+              a.energy = Math.min(3, a.energy + (0.5 + B.g.r / 25) * (1 - 0.6 * B.g.col.tox));
+              g.food += 1;
+              a.act = B.g.col.tox > 0.15 ? 'feeling sick' : 'feeding';
+            }
           }
         }
       }
@@ -264,7 +309,19 @@ export class Microcosm {
           if (d2 < mD && b.energy > 1.3) { mD = d2; a.mate = b; }
         } else {
           if (d2 < tD && this.canEat(b, a)) { tD = d2; a.threat = b; }
-          if (d2 < pD && this.canEat(a, b)) { pD = d2; a.prey = b; }
+          if (d2 < pD && a.sick <= 0 && this.canEat(a, b)) {
+            // camouflaged prey is only noticed close up; conspicuous prey from further away
+            const seen = R * (1 - 0.6 * b.g.col.crypsis) * (1 + 0.15 * b.g.col.conspic);
+            if (d2 > seen * seen) continue;
+            // prey that looks like something that made it sick is left alone
+            const [av, from] = a.memory.length ? this.aversion(a, b) : [0, null];
+            if (av > a.bold) {
+              if (!b.spared) { b.spared = true; b.g.spared++; }
+              if (from !== b.g && b.g.col.tox < 0.15 && !b.g.mistaken++) this.events.push({ g: b.g, msg: `🦋 ${a.g.sp.name} leaves ${b.g.sp.name} alone, mistaking it for the poisonous ${from.sp.name}: mimicry at work.` });
+              continue;
+            }
+            pD = d2; a.prey = b;
+          }
         }
       }
       a.kin = kn;

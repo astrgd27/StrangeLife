@@ -8,6 +8,15 @@ import { SENSES, ACTIONS, NI, NH, NO, behaviours } from './brain.js';
 import { GRADES, KINGDOMS } from './ecosystem.js';
 
 const $ = (id) => document.getElementById(id);
+// warning colours, camouflage and what predators have learned, for the species list
+function colourNote(g) {
+  const c = g.col, out = [];
+  if (c.tox > 0.15) out.push(`☠️ poisonous${c.conspic > 0.5 ? ', warning colours' : ''}${g.sickened ? ` · made predators sick ${g.sickened}×` : ''}${g.spat ? ` · ${g.spat} spat out alive` : ''}`);
+  else if (c.crypsis > 0.55) out.push('🍃 camouflaged: predators spot it only close up');
+  if (g.spared) out.push(`🛡️ ${g.spared} left alone by predators that learned${g.mistaken ? ' (mistaken for a poisonous species)' : ''}`);
+  if (g.learned.size) out.push(`🤢 learned to avoid ${[...g.learned].map((q) => `<i>${esc(q.sp.name)}</i>`).join(', ')}`);
+  return out.length ? `<div class="muted small zcol">${out.join('<br>')}</div>` : '';
+}
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const rgb = (c, k = 1) => `rgb(${Math.round(c[0] * 255 * k)},${Math.round(c[1] * 255 * k)},${Math.round(c[2] * 255 * k)})`;
 const SPEEDS = [0, 1, 5, 20];
@@ -113,7 +122,7 @@ export class ZoneView {
     if (!this.isOpen || !this.m) return;
     const m = this.m;
     if (SPEEDS[this.speed]) m.update(dt * SPEEDS[this.speed]);
-    for (const e of m.events.splice(0)) this.hooks.toast?.(`🧠 ${e.g.sp.name} has evolved: it ${e.text}.`);
+    for (const e of m.events.splice(0)) this.hooks.toast?.(e.msg || `🧠 ${e.g.sp.name} has evolved: it ${e.text}.`);
     if (this.sel && !this.sel.alive) this.sel = null;
     this.draw();
     if (now - this.lastPanel > 400) { this.lastPanel = now; this.renderPanel(); }
@@ -193,8 +202,11 @@ export class ZoneView {
         if (Math.cos(a.heading) < 0) ctx.scale(1, -1);
       }
       if (sel && sel.g === a.g && sel !== a) ctx.globalAlpha = 0.95;
+      // camouflaged animals blend into the ground unless you're following them
+      else if (a !== sel && a.g.col.crypsis > 0.3) ctx.globalAlpha = 1 - 0.55 * a.g.col.crypsis;
       ctx.drawImage(img, -s / 2, -s / 2, s, s);
       ctx.restore();
+      if (a.sick > 0) { ctx.font = `${Math.max(12, a.g.r * 1.4)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillText('🤢', a.x, a.y - a.g.r - 6); }
       if (a === sel) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(a.x, a.y, a.g.r + 6, 0, Math.PI * 2); ctx.stroke(); }
     }
     ctx.restore();
@@ -215,7 +227,8 @@ export class ZoneView {
         <div><div class="nm"><i>${esc(g.sp.name)}</i> <span class="muted">${GRADES[g.sp.grade].name}</span></div>
         <div class="muted small">${g.count} alive · generation ${g.maxGen} · ${g.births} born, ${g.eaten} eaten</div>
         ${d.filter ? '<div class="muted small">Filter-feeds in place</div>' : `<div class="zskills">${feed}${bar(k.evade, 'Escaping')}${bar(Math.max(0, k.herd), d.aquatic ? 'Schooling' : 'Herding')}</div>`}
-        ${notes.length ? `<div class="znotes">${notes.map((n) => `<span class="tag">${n}</span>`).join('')}</div>` : ''}</div></li>`;
+        ${notes.length ? `<div class="znotes">${notes.map((n) => `<span class="tag">${n}</span>`).join('')}</div>` : ''}
+        ${colourNote(g)}</div></li>`;
     }).join('');
     const list = $('zone-species');
     if (list._html !== html) { list.innerHTML = html; list._html = html; }
@@ -224,6 +237,7 @@ export class ZoneView {
     box.innerHTML = `<div class="nm"><b><i>${esc(sel.sp.name)}</i></b> #${sel.id}</div>
       <div class="muted small">${sel.act} · generation ${sel.gen} · ${sel.kids} offspring · age ${Math.round(sel.age)} s</div>
       <div class="zs"><span>Energy</span><span class="gbar"><i style="width:${Math.round(Math.min(1, sel.energy / 2.2) * 100)}%"></i></span></div>
+      ${sel.memory?.some((q) => q.s > 0.15) ? `<div class="muted small">Remembers: ${sel.memory.filter((q) => q.s > 0.15).map((q) => `<i>${esc(q.g.sp.name)}</i> made it sick (${Math.round(q.s * 100)}%)`).join(', ')}</div>` : ''}
       <canvas id="zone-brain" width="560" height="300" aria-label="Its brain: senses on the left, actions on the right"></canvas>
       <div class="muted small">Its brain: senses (left) feed 6 neurons that choose where to go (right). Orange connections excite, blue ones inhibit; bright circles are active now.</div>`;
     this.drawBrain($('zone-brain'), sel);
