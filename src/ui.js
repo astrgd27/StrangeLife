@@ -5,6 +5,7 @@ import { EONS, formatYears } from './world.js';
 import { STORY, EVENTS, storyByKey } from './science.js';
 import { CIV_STAGES } from './civ.js';
 import { spriteURL, palette } from './sprites.js';
+import { estimateSpecies, lineageSpecies, formatCount } from './richness.js';
 import { behaviours } from './brain.js';
 import { dietOf } from './microcosm.js';
 import { GENES, GENE_INFO, GI, describeLooks, lookHeritage, heritageText } from './genome.js';
@@ -295,7 +296,10 @@ export class UI {
       $('clock-value').textContent = formatYears(W.years);
       const civ = W.civ && !W.civ.fallen ? W.civ : null;
       $('eon-chip').textContent = civ ? `${civ.info.icon} ${civ.info.name}` : EONS[W.eon].name;
-      $('stat-species').textContent = E.alive.length;
+      // each lineage stands for a clade: the top bar shows the estimated number of species
+      const est = estimateSpecies(E, W.years);
+      $('stat-species').textContent = E.alive.length ? `~${formatCount(est.total, true)}` : '0';
+      $('stat-species').parentElement.title = `${E.alive.length} lineages followed, standing for about ${formatCount(est.total)} species (an estimate: see the Life tab)`;
       $('stat-life').textContent = `${Math.round(((E.lifeZones || 0) / E.Z) * 100)}%`;
       $('stat-temp').textContent = `${P.meanT.toFixed(0)}°C`;
       $('stat-o2').textContent = `${P.o2.toFixed(P.o2 < 1 ? 1 : 0)}%`;
@@ -318,12 +322,13 @@ export class UI {
     setHTML($('kingdom-row'), KINGDOM_KEYS.map((k, i) => {
       const n = byK[k].length;
       const pct = E.kRange ? Math.round((E.kRange[i] / E.Z) * 100) : 0;
+      const nk = byK[k].reduce((a, sp) => a + lineageSpecies(E, sp), 0);
       return `<button class="kchip${this.kingdomFilter === k ? ' active' : ''}${n ? '' : ' empty'}" data-k="${k}" style="--k:${KINGDOMS[k].color}">
-        <span class="kname">${KINGDOMS[k].name}</span><span class="kval mono">${n ? `${n} sp · ${pct}%` : 'none yet'}</span></button>`;
+        <span class="kname">${KINGDOMS[k].name}</span><span class="kval mono" title="${n} lineages, about ${formatCount(nk)} species">${n ? `~${formatCount(nk, true)} sp · ${pct}%` : 'none yet'}</span></button>`;
     }).join(''));
     const shown = this.kingdomFilter ? byK[this.kingdomFilter] : living;
     $('species-summary').textContent = living.length
-      ? `${living.length} living species across ${KINGDOM_KEYS.filter((k) => byK[k].length).length} kingdoms. Percentages are the share of the planet's zones each kingdom lives in. Click a species to see its range.`
+      ? `${living.length} lineages across ${KINGDOM_KEYS.filter((k) => byK[k].length).length} kingdoms, standing for about ${formatCount(living.reduce((a, sp) => a + lineageSpecies(E, sp), 0))} species (each lineage is a clade, estimated from its kind of life, range and age). Percentages: the share of zones each kingdom lives in. Click one to see its range.`
       : 'No life yet. Watch the Planet tab to see how close the chemistry is to producing the first cell, or seed life with the 🧬 tool.';
     const hl = this.r.highlight;
     const rows = shown.slice(0, 120).map((sp) => {
@@ -340,6 +345,7 @@ export class UI {
           <dt>Cells</dt><dd>${sp.domain === 'eukaryote' ? `Complex cells${sp.mito ? ', mitochondria' : ''}${sp.chloro ? ', chloroplasts' : ''}` : 'Simple cells (no nucleus)'}</dd>
           <dt>Appeared</dt><dd>${formatYears(sp.bornYears)}${parent ? ` from <i>${esc(parent.name)}</i>` : ''}</dd>
           <dt>Range</dt><dd>${sp.range} zones (peak ${sp.peakRange})</dd>
+          <dt>Species in it</dt><dd>about ${formatCount(lineageSpecies(E, sp))} <span class="muted">(estimated: a lineage stands for a clade of related species)</span></dd>
           <dt>Climate</dt><dd>${sp.pref.toFixed(0)}°C ± ${sp.tol.toFixed(0)}°</dd>
           <dt>Niche</dt><dd>${nicheText(sp)}</dd>
           ${sp.allopatric ? '<dt>Origin</dt><dd>Split off after its population was isolated</dd>' : sp.display ? '<dt>Origin</dt><dd>Split by mate choice (sexual selection)</dd>' : sp.cospeciated ? '<dt>Origin</dt><dd>Split along with its host plant</dd>' : ''}

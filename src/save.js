@@ -7,6 +7,7 @@
 
 import { World } from './world.js';
 import { Civilization } from './civ.js';
+import { MAXT } from './ecosystem.js';
 import { NG, GI, makeGenes, randomLooks, ARCHETYPES } from './genome.js';
 
 // a small seeded generator, so an old species always gets the same new look
@@ -79,7 +80,7 @@ export function serialize(world, meta = {}) {
     eco: {
       ...scalars(E),
       species, alive: E.alive.slice(), innovations: [...E.innovations],
-      bIdx: packTA(Int32Array.from(idx)), bVal: packTA(Float32Array.from(val)),
+      bIdx: packTA(Int32Array.from(idx)), bVal: packTA(Float32Array.from(val)), maxt: MAXT,
       detS: packTA(E.detS), detL: packTA(E.detL),
       specLog: E.specLog, radiationNoted: E.radiationNoted,
       groupOrigins: E.groupOrigins, groupsSeen: [...(E.groupsSeen || [])], groupFrom: E.groupFrom || {},
@@ -153,6 +154,9 @@ export function deserialize(data) {
   E.B.fill(0);
   E.presN.fill(0);
   const I = unpackTA(bIdx), V = unpackTA(bVal);
+  // (a save from a version that followed a different number of lineages: re-index by zone and slot)
+  const oldM = e.maxt || 160;
+  if (oldM !== MAXT) for (let i = 0; i < I.length; i++) { const z = Math.floor(I[i] / oldM), s = I[i] % oldM; I[i] = z * MAXT + s; }
   for (let k = 0; k < I.length; k++) {
     const i = I[k], z = Math.floor(i / (E.B.length / E.Z)), s = i - z * (E.B.length / E.Z);
     if (E.slots[s]) E.addB(z, s, V[k]);

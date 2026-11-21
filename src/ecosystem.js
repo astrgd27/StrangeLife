@@ -24,8 +24,9 @@ import { probe } from './brain.js';
 import { FAMILY, GI, ARCHETYPES, develop, classify, ecology, mutate, innovate, evolvable, makeGenes, setDiet, storyKeysFor, describe, randomLooks, sexualLooks, LOOK_GENES, lookSimilarity, convergeLooks } from './genome.js';
 
 export const ZONE_LEVEL = 4;
-const MAXT = 160;            // species slots
-const SOFT_CAP = 80;         // speciation slows above this many living species
+const MAXT = 400;            // species slots (lineages followed at once)
+const LSCALE = MAXT / 160;   // the caps below were set for 160 slots and scale with it
+const SOFT_CAP = Math.round(80 * LSCALE); // speciation slows above this many living species
 const SPEC_CAP = MAXT - 25;  // ordinary speciation stops here, keeping slots free for major transitions
 const EXTINCT = 1e-5;
 const LAND_TARGET = [0.04, 0.42, 0.82, 0.1]; // drought resistance favoured at sea, on shores, on land, in fresh water
@@ -134,7 +135,9 @@ const abundance = (sp) => sp.total * (sp.habitat === 3 ? 3 : 1) * (sp.trophic ==
 // parasites are counted as their own group (parasitic worms apart from free-living ones)
 // (and so are poisonous animals, which crowd out only each other)
 const gkey = (sp) => (sp.trophic === 6 ? sp.grade + '*' : sp.ph?.poison > 0.6 ? sp.grade + '!' : sp.grade);
-const capOf = (key) => (key.endsWith('*') ? 10 : key.endsWith('!') ? 6 : GRADE_CAP[key] ?? GROUP_CAP[GRADES[key].kingdom]);
+// how many lineages a kind of life usually holds (for estimating real species numbers)
+export const groupCapOf = (grade) => capOf(grade);
+const capOf = (key) => Math.round(LSCALE * (key.endsWith('*') ? 10 : key.endsWith('!') ? 6 : GRADE_CAP[key] ?? GROUP_CAP[GRADES[key].kingdom]));
 
 // how strongly mate choice drives speciation (birds and fish are famous for it)
 // (scaled by each species' display gene: showy colours, songs and dances)
@@ -270,7 +273,7 @@ export class Ecosystem {
     this.suit = new Float32Array(Z * MAXT);
     this.zStruct = new Float32Array(Z);
     // per-zone lists of the species present, so the simulation skips empty entries
-    this.pres = new Uint8Array(Z * MAXT);
+    this.pres = new Uint16Array(Z * MAXT);
     this.presN = new Uint16Array(Z);
     this.updateEnvironment();
   }
@@ -334,15 +337,17 @@ export class Ecosystem {
   refreshSuit(s) {
     const sp = this.slots[s];
     if (!sp) return;
-    const pref = this.tPref[s], tol = this.tTol[s], h = this.tHab[s], suit = this.suit;
-    const n2 = sp.n2, n2t = sp.n2tol, alt = sp.alt, altT = sp.altTol;
-    for (let z = 0; z < this.Z; z++) {
-      const T = h === 0 ? this.zTs[z] : h >= 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]);
-      const d = (T - pref) / tol;
-      const e = ((h === 0 ? this.zDs[z] : this.zMl[z]) - n2) / n2t;
-      const a = h >= 2 ? (this.zHl[z] - alt) / altT : 0;
+    const pref = this.tPref[s], itol = 1 / this.tTol[s], h = this.tHab[s], suit = this.suit, Z = this.Z;
+    const n2 = sp.n2, in2t = 1 / sp.n2tol, alt = sp.alt, ialtT = 1 / sp.altTol;
+    const zTs = this.zTs, zTl = this.zTl, zDs = this.zDs, zMl = this.zMl, zHl = this.zHl;
+    for (let z = 0; z < Z; z++) {
+      const T = h === 0 ? zTs[z] : h >= 2 ? zTl[z] : 0.5 * (zTs[z] + zTl[z]);
+      const d = (T - pref) * itol;
       // temperature limits survival outright; rainfall/depth and altitude shape how well a
       // species does (a mismatch costs up to 70% of its performance, not its life)
+      if (d * d > 30) { suit[z * MAXT + s] = 0; continue; }
+      const e = ((h === 0 ? zDs[z] : zMl[z]) - n2) * in2t;
+      const a = h >= 2 ? (zHl[z] - alt) * ialtT : 0;
       suit[z * MAXT + s] = Math.exp(-0.5 * d * d) * (0.3 + 0.7 * Math.exp(-0.5 * (e * e + a * a)));
     }
   }
@@ -602,25 +607,28 @@ export class Ecosystem {
     this.years = years;
     const P = this.planet, B = this.B, Z = this.Z, alive = this.alive;
     const o2 = P.o2, ozone = P.ozone;
-    const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing, tHost, tDry, tVuln, tSucc, tClimb, tRock, tCoral, tRoots } = this;
+    const { tTroph, tHab, tPool, tPref, tTol, tR, tK, tM, tE, tImax, tHalf, tO2, tSelf, wChem, wMicro, wProd, wHerb, wDet, tKing, tHost, tDry, tVuln, tSucc, tClimb, tRock, tCoral, tRoots, tPal, tGraze, tHardy, tDraw } = this;
+    const { zSeason, zKf, zMl, zKs, zKl, zDs, zTs, zTl, zHl, zFw } = this;
     if (this.webDirty) this.buildLinks();
     const link = this.link, flow = this.flow;
     const loss = this._loss || (this._loss = new Float32Array(MAXT));
-    const preyList = this._preyList || (this._preyList = new Uint8Array(MAXT));
+    const preyList = this._preyList || (this._preyList = new Uint16Array(MAXT));
     // corals need algae to partner with; roots need bacteria
     const algaeOK = this.gradeAlive('algae') || this.gradeAlive('diatom') || this.gradeAlive('cyano') ? 1 : 0;
+    const pollinatorsAlive = this.gradeAlive('insect') || this.gradeAlive('bird') || this.gradeAlive('bat');
     // which species build reefs (1) or forests (2)
     const engineer = this._eng || (this._eng = new Uint8Array(MAXT));
     for (const s of alive) {
       const sp = this.slots[s];
       engineer[s] = sp.grade === 'sponge' && sp.habitat === 0 && tCoral[s] ? 1 : (sp.grade === 'fern' || sp.grade === 'conifer' || sp.grade === 'flower') && sp.size > 0.45 ? 2 : 0;
+      // (flowering plants without pollinators do poorly: worked out once per species, not per zone)
+      if (sp.grade === 'flower' && !pollinatorsAlive) engineer[s] |= 4;
     }
     const total = this.total, range = this.range, sumT = this.sumT, pres = this.pres, presN = this.presN;
     const sumN2 = this.sumN2 || (this.sumN2 = new Float32Array(MAXT)), sumA = this.sumA || (this.sumA = new Float32Array(MAXT));
     total.fill(0); range.fill(0); sumT.fill(0); sumN2.fill(0); sumA.fill(0);
     const nA = alive.length;
     const fungK = KINGDOM_KEYS.indexOf('fungus');
-    const pollinators = this.gradeAlive('insect') || this.gradeAlive('bird') || this.gradeAlive('bat');
     // plants with their own specialist insects get dedicated pollinators
     const pollinated = this.pollinated || (this.pollinated = new Uint8Array(MAXT));
     pollinated.fill(0);
@@ -650,21 +658,21 @@ export class Ecosystem {
         const h = tHab[s], hs = h === 0 ? 1 : h === 1 ? 0.5 : 0, hl = 1 - hs;
         const p = tPool[s];
         if (p === 0) { const v = b * tVuln[s]; microS += v * hs; microL += v * hl; }
-        else if (p === 1) { prodS += b * hs; prodL += b * hl; if (h === 3) prodF += b; const e = b * this.tPal[s]; edS += e * hs; edL += e * hl; }
+        else if (p === 1) { prodS += b * hs; prodL += b * hl; if (h === 3) prodF += b; const e = b * tPal[s]; edS += e * hs; edL += e * hl; }
         else if (p === 2) preyList[np++] = s;
         if (tTroph[s] === 2) { decS += b * hs; decL += b * hl; if (tKing[s] === fungK) fungL += b * hl; }
-        const ge = engineer[s];
+        const ge = engineer[s] & 3;
         if (ge === 1) reef += b; else if (ge === 2) forest += b;
       }
       if (!any) { presN[z] = 0; this.orgFactor[z] = 1; this.coverS[z] = 0; this.coverL[z] = 0; continue; }
-      const detS = this.detS[z], detL = this.detL[z], org = this.zOrg[z];
+      const detS = this.detS[z], detL = this.detL[z], org = this.zOrg[z], season = zSeason[z], dryness = zMl[z], tsz = zTs[z], dsz = zDs[z];
       // decomposers recycle nutrients; mycorrhizal fungi feed land plants
       const nutS = 1 + 0.3 * Math.min(1, decS / 0.02);
       const nutL = 1 + 0.25 * Math.min(1, decL / 0.02) + 0.35 * Math.min(1, fungL / 0.02);
-      const KS = this.zKs[z] * nutS, KL = this.zKl[z] * nutL;
+      const KS = zKs[z] * nutS, KL = zKl[z] * nutL;
       // ecosystem engineers: coral reefs in sunlit shallows and tall forests build 3D habitat,
       // with more hiding places and microhabitats, so more species can coexist in the zone
-      const struct = Math.min(1, (this.zDs[z] < 0.35 ? reef / 0.02 : 0) * 0.6 + forest / (0.4 * Math.max(0.05, this.zKl[z])));
+      const struct = Math.min(1, (dsz < 0.35 ? reef / 0.02 : 0) * 0.6 + forest / (0.4 * Math.max(0.05, zKl[z])));
       this.zStruct[z] = struct;
       const coexist = 1 - 0.45 * struct;
       let cMicroS = 0, cMicroL = 0, cProdS = 0, cProdL = 0, cDetS = 0, cDetL = 0, cChem = 0;
@@ -678,9 +686,9 @@ export class Ecosystem {
         const suit = suitArr[base + s];
         const o2f = tO2[s] > 0 ? Math.min(1, o2 / tO2[s]) : 1;
         // (harsh seasons weigh on everything that can't go dormant, keep warm or leave)
-        let mort = tM[s] + 0.05 * (1 - suit) + 0.08 * (1 - o2f) + 0.1 * hl * (1 - ozone) + tDry[s] + 0.045 * this.zSeason[z] * (1 - this.tHardy[s]);
+        let mort = tM[s] + 0.05 * (1 - suit) + 0.08 * (1 - o2f) + 0.1 * hl * (1 - ozone) + tDry[s] + 0.045 * season * (1 - tHardy[s]);
         // habitat shrinking under them (sea level, ice)
-        const room = h === 0 ? zs : h === 2 ? zl : h === 3 ? Math.min(1, 0.2 + 6 * this.zFw[z]) : Math.min(1, 4 * Math.min(zs, zl));
+        const room = h === 0 ? zs : h === 2 ? zl : h === 3 ? Math.min(1, 0.2 + 6 * zFw[z]) : Math.min(1, 4 * Math.min(zs, zl));
         if (room < 0.03) mort += 0.2;
         // Allee effect: tiny populations struggle to find mates and recover (parasites are always
         // small by weight, but they live packed inside their hosts)
@@ -690,11 +698,10 @@ export class Ecosystem {
         if (tTroph[s] === 1) {
           // land capacity: water-storing plants do well where it's dry, climbers where there are
           // trees to climb, lichens on bare rock; fresh water has its own
-          const dryness = this.zMl[z];
-          let kl = h === 3 ? this.zKf[z] * nutL
+          let kl = h === 3 ? zKf[z] * nutL
             : KL * (1 + tSucc[s] * (2.4 * Math.max(0, 0.45 - dryness) - 0.8 * Math.max(0, dryness - 0.4))) * (1 + 1.5 * tClimb[s] * struct);
           if (tRock[s]) kl = Math.max(kl, 0.12 * zl);
-          const K = (hs * KS + hl * kl * (pollinators || this.slots[s].grade !== 'flower' ? 1 : 0.6)) * tK[s] * (this.pollinated[s] ? 1.15 : 1) * (tRoots[s] ? 1.2 : 1);
+          const K = (hs * KS + hl * kl * (engineer[s] & 4 ? 0.6 : 1)) * tK[s] * (pollinated[s] ? 1.15 : 1) * (tRoots[s] ? 1.2 : 1);
           // (water plants compete for light only with each other, not with the forest on the bank)
           const crowd = h === 3 ? prodF : hs * prodS + hl * (prodL - prodF);
           nb = b + tR[s] * b * (suit * o2f - crowd / (K + 1e-6)) - mort * 0.3 * b;
@@ -737,13 +744,13 @@ export class Ecosystem {
           // too much heat makes them expel the algae (bleaching)
           let extra = 0;
           if (tCoral[s]) {
-            extra = algaeOK * 0.06 * Math.min(1, this.zKs[z] * 2) * (this.zDs[z] < 0.35 ? 1 : 0.3);
-            const heat = (this.zTs[z] - tPref[s]) / tTol[s] - 0.8;
+            extra = algaeOK * 0.06 * Math.min(1, zKs[z] * 2) * (dsz < 0.35 ? 1 : 0.3);
+            const heat = (tsz - tPref[s]) / tTol[s] - 0.8;
             if (heat > 0) { mort += 0.15 * heat; extra *= Math.max(0, 1 - heat); }
           }
           nb = b + b * (tE[s] * I * suit * o2f + extra * suit - mort - tSelf[s] * coexist * b);
           if (F > 0) {
-            const eat = (b * I / F) * this.tDraw[s];
+            const eat = (b * I / F) * tDraw[s];
             cMicroS += eat * fMicro * hs; cMicroL += eat * fMicro * hl;
             if (hostSlot >= 0) { const take = eat * fProd; loss[hostSlot] += take; flow[s * MAXT + hostSlot] += take; }
             else { cProdS += eat * fProd * hs; cProdL += eat * fProd * hl; }
@@ -788,7 +795,7 @@ export class Ecosystem {
             nb *= hs * Math.max(0, 1 - v * (1 - fmS)) + hl * Math.max(0, 1 - v * (1 - fmL));
           } else if (p === 1) {
             // grazing falls on palatable plants; grasses shrug much of it off
-            const v = this.tPal[s] * this.tGraze[s];
+            const v = tPal[s] * tGraze[s];
             nb *= hs * Math.max(0, 1 - v * (1 - fpS)) + hl * Math.max(0, 1 - v * (1 - fpL));
           }
           if (p === 1) { pS += nb * hs; pL += nb * hl; }
@@ -801,9 +808,9 @@ export class Ecosystem {
           if (nb > 1e-4) kmask |= 1 << tKing[s];
           if (tKing[s] === archK) methane += nb; // archaea include the methanogens
           const h = tHab[s];
-          sumT[s] += nb * (h === 0 ? this.zTs[z] : h >= 2 ? this.zTl[z] : 0.5 * (this.zTs[z] + this.zTl[z]));
-          sumN2[s] += nb * (h === 0 ? this.zDs[z] : this.zMl[z]);
-          if (h >= 2) sumA[s] += nb * this.zHl[z];
+          sumT[s] += nb * (h === 0 ? tsz : h >= 2 ? zTl[z] : 0.5 * (tsz + zTl[z]));
+          sumN2[s] += nb * (h === 0 ? dsz : dryness);
+          if (h >= 2) sumA[s] += nb * zHl[z];
         }
       }
       presN[z] = w;
@@ -811,8 +818,8 @@ export class Ecosystem {
       this.detS[z] = Math.max(0, detS * 0.93 + deadS - cDetS);
       this.detL[z] = Math.max(0, detL * 0.93 + deadL - cDetL);
       this.orgFactor[z] = org > 0 ? Math.max(0, 1 - cChem / org) : 1;
-      this.coverS[z] = this.zKs[z] > 0 ? Math.min(1, pS / this.zKs[z]) : 0;
-      this.coverL[z] = this.zKl[z] > 0 ? Math.min(1, pL / this.zKl[z]) : 0;
+      this.coverS[z] = zKs[z] > 0 ? Math.min(1, pS / zKs[z]) : 0;
+      this.coverL[z] = zKl[z] > 0 ? Math.min(1, pL / zKl[z]) : 0;
     }
 
     this.lifeZones = lifeZones;
@@ -867,7 +874,7 @@ export class Ecosystem {
     const ok = this._okCache || (this._okCache = new Uint8Array(Z * 4));
     for (let z = 0; z < Z; z++) for (let h = 0; h < 4; h++) ok[z * 4 + h] = this.habitatOk(h, z) ? 1 : 0;
     const recZ = this._recZ || (this._recZ = new Int32Array(Z * MAXT));
-    const recS = this._recS || (this._recS = new Uint8Array(Z * MAXT));
+    const recS = this._recS || (this._recS = new Uint16Array(Z * MAXT));
     const recA = this._recA || (this._recA = new Float32Array(Z * MAXT));
     const recH = this._recH || (this._recH = new Int16Array(Z * MAXT));
     let n = 0;
@@ -879,9 +886,9 @@ export class Ecosystem {
         if (b < (this.tTroph[s] === 6 ? 2e-6 : 1e-4)) continue;
         const h = this.tHab[s];
         let cnt = 0;
+        // (parasites only spread to where their hosts live)
         const host = this.tTroph[s] === 6 ? this.tHost[s] : -1;
-        const fits = (q) => ok[q * 4 + h] && (host < 0 || B[q * MAXT + host] > 1e-4); // parasites only spread to their hosts
-        for (let k = k0; k < k1; k++) if (fits(zg.nbr[k])) cnt++;
+        for (let k = k0; k < k1; k++) { const q = zg.nbr[k]; if (ok[q * 4 + h] && (host < 0 || B[q * MAXT + host] > 1e-4)) cnt++; }
         if (!cnt) continue;
         // dispersal rises with crowding: sparse populations mostly stay put instead of
         // smearing themselves too thin to breed (runs every 4th tick)

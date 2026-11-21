@@ -1,3 +1,5 @@
+import { MAXT } from './ecosystem.js';
+
 // Is it like Earth? Five of the best-known patterns in Earth's biodiversity, measured in a
 // simulated world and set beside Earth's own. Pure functions: no drawing (see earthview.js).
 //
@@ -52,7 +54,9 @@ const lsq = (pts) => {
 function timeline(world) {
   const h = world.history, i0 = h.findIndex((p) => p.kingdoms?.animal?.species >= 2);
   if (i0 < 0 || h.length - i0 < 15) return { ok: null, summary: 'Not enough history yet: wait until animals have been around for a while.', series: [] };
-  const pts = h.slice(i0).map((p) => [p.years, p.kingdoms.animal.species]);
+  // estimated species where the history has them (each lineage stands for a clade), else lineages
+  const est = h[h.length - 1].estAnimals !== undefined;
+  const pts = h.slice(i0).map((p) => [p.years, est ? p.estAnimals ?? p.kingdoms.animal.species : p.kingdoms.animal.species]);
   const t0 = pts[0][0], t1 = pts[pts.length - 1][0], max = Math.max(...pts.map((p) => p[1])) || 1;
   const series = pts.map(([t, s]) => [(t - t0) / (t1 - t0 || 1), s / max, s, t]);
   // drops: from a peak, a fall of at least 30% within a short time
@@ -60,7 +64,7 @@ function timeline(world) {
   for (let i = 1; i < pts.length; i++) {
     let peak = 0, pk = -1;
     for (let j = Math.max(0, i - 12); j < i; j++) if (pts[j][1] > peak) { peak = pts[j][1]; pk = j; }
-    if (peak >= 6 && pts[i][1] <= peak * 0.7 && (!drops.length || pk > drops[drops.length - 1].at)) drops.push({ at: i, from: peak, to: pts[i][1], x: series[i][0], years: pts[i][0] });
+    if (peak >= (est ? 600 : 6) && pts[i][1] <= peak * 0.7 && (!drops.length || pk > drops[drops.length - 1].at)) drops.push({ at: i, from: peak, to: pts[i][1], x: series[i][0], years: pts[i][0] });
   }
   // merge drops into events at their lowest point
   const events = [];
@@ -71,10 +75,10 @@ function timeline(world) {
   const rise = late / Math.max(1, early);
   const ok = rise > 1.3 && (events.length === 0 || recovered >= Math.min(1, events.length));
   return {
-    ok, series, events, rise, recovered,
-    summary: `Animal species rose ${rise.toFixed(1)}× from the first quarter of animal history to the last, with ${events.length} sharp drop${events.length === 1 ? '' : 's'} of 30% or more${events.length ? ` (${recovered} recovered)` : ''}.`,
+    ok, series, events, rise, recovered, est,
+    summary: `${est ? 'Estimated animal species' : 'Animal lineages'} rose ${rise.toFixed(1)}× from the first quarter of animal history to the last, with ${events.length} sharp drop${events.length === 1 ? '' : 's'} of 30% or more${events.length ? ` (${recovered} recovered)` : ''}.`,
     earth: 'On Earth, marine animal diversity rose about tenfold over 540 million years, set back by five mass extinctions and recovering each time.',
-    note: 'The simulation follows at most 160 lineages at once, so its rise levels off sooner than Earth\'s.',
+    note: `The simulation follows at most ${MAXT} lineages at once; each stands for a clade of species, estimated from its group, its range and how long its kind of life has had to diversify.`,
   };
 }
 

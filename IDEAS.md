@@ -107,8 +107,8 @@ Ordered by how much Earth-like variety each adds for the effort.
    - **Ocean currents and upwelling:** rich coasts and coral hotspots.
    - **Rain shadows:** behind mountain ranges.
    - **A "realms" map view:** zones grouped by shared species, showing continents with their own faunas (marsupials in Australia, Wallace's Line).
-6. ✅ **Checking it against Earth.** (Built: the *Is it like Earth?* view. Latitude, species–area and commonness match untuned; body sizes pass in about half of worlds, less skewed to small species than Earth's; diversity through time levels off too early until item 7.)
-7. **Realistic species numbers.** Estimate how many species each simulated lineage holds (from range, habitat variety and body size) for Earth-scale totals, and raise the lineage limit with a faster engine on a background thread.
+6. ✅ **Checking it against Earth.** (Built: the *Is it like Earth?* view. Latitude, species–area and commonness match untuned; body sizes pass in about half of worlds, less skewed to small species than Earth's; diversity through time now rises with estimated species, though less steeply than Earth's.)
+7. ✅ **Realistic species numbers.** (Built: 400 lineage slots instead of 160, about 250 lineages living at once at the old speed, and an estimate of how many species each lineage stands for, from its kind of life, its range and how long its kind has had to diversify: mature worlds hold about 2–4 million species.) Still to do: run the simulation on a background thread so the game stays smooth at top speed, and let habitat variety and body size feed the estimate.
 8. ✅ (looks) **Inherited looks.** (Built: colours, markings, ornaments and proportions passed down and drifting, drawn for every body plan.) ✅ Warning colours, camouflage and mimicry (built at the species level). Up close, predators learn which prey to avoid (✅). Next: camouflage that matches the local ground.
 9. **More behaviour up close.** Mating displays, warning colours and mimicry, camouflage, and behaviour evolving in zones you aren't watching.
 

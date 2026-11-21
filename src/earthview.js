@@ -4,6 +4,7 @@
 
 import { earthCheck, EARTH_TIMELINE, EARTH_LATITUDE, LAT_BANDS, EARTH_Z, EARTH_BODY, earthRank } from './earthcheck.js';
 import { formatYears } from './world.js';
+import { formatCount } from './richness.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -84,7 +85,7 @@ function table(c) {
   if (c.key === 'lat' && c.per) rows = c.per.map((v, i) => [`${LAT_BANDS[i]}–${LAT_BANDS[i + 1]}°`, v.toFixed(1), `${Math.round(EARTH_LATITUDE[i] * 100)}%`]);
   else if (c.key === 'size' && c.counts?.length) rows = c.counts.map((v, i) => [`class ${i + 1}`, v, `${Math.round(EARTH_BODY[i] * 100)}%`]);
   else if (c.key === 'area' && c.pts?.length) rows = c.pts.map(([a, s]) => [`${Math.round(10 ** a)} zones`, Math.round(10 ** s), '']);
-  else if (c.key === 'time' && c.events?.length) rows = c.events.map((ev) => [formatYears(ev.years), `${ev.from} → ${ev.to} species`, '']);
+  else if (c.key === 'time' && c.events?.length) rows = c.events.map((ev) => [formatYears(ev.years), `${formatCount(ev.from)} → ${formatCount(ev.to)} species`, '']);
   if (!rows.length) return '';
   const head = { lat: ['Latitude', 'Species per zone', 'Earth (share of tropics)'], size: ['Size, small → large', 'Animal species', 'Earth (share of peak)'], area: ['Area', 'Species', ''], time: ['Drop', 'Animal species', ''] }[c.key];
   return `<details class="ec-table"><summary>Numbers</summary><table><thead><tr>${head.filter(Boolean).map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.slice(0, head.filter(Boolean).length).map((v) => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table></details>`;
@@ -132,8 +133,8 @@ const CHARTS = {
     const pts = c.series.map(([t, v, s, yrs]) => [b.X(t), b.Y(v), s, yrs]);
     line(ctx, pts.map(([x, y]) => [x, y]), PLANET);
     const step = Math.max(1, Math.floor(pts.length / 60));
-    pts.forEach(([x, y, s, yrs], i) => { if (i % step === 0) hits.push({ x, y, col: PLANET, text: `This planet, ${formatYears(yrs)}: ${s} animal species` }); });
-    for (const ev of c.events) { const x = b.X(ev.x), y = b.Y(ev.to / Math.max(...c.series.map((p) => p[2]))); ctx.fillStyle = PLANET; ctx.beginPath(); ctx.moveTo(x - 5, y + 8); ctx.lineTo(x + 5, y + 8); ctx.lineTo(x, y + 2); ctx.closePath(); ctx.fill(); hits.push({ x, y: y + 6, col: PLANET, text: `A drop of ${Math.round((1 - ev.to / ev.from) * 100)}%: ${ev.from} → ${ev.to} animal species` }); }
+    pts.forEach(([x, y, s, yrs], i) => { if (i % step === 0) hits.push({ x, y, col: PLANET, text: `This planet, ${formatYears(yrs)}: ${c.est ? `about ${formatCount(s)}` : s} animal species` }); });
+    for (const ev of c.events) { const x = b.X(ev.x), y = b.Y(ev.to / Math.max(...c.series.map((p) => p[2]))); ctx.fillStyle = PLANET; ctx.beginPath(); ctx.moveTo(x - 5, y + 8); ctx.lineTo(x + 5, y + 8); ctx.lineTo(x, y + 2); ctx.closePath(); ctx.fill(); hits.push({ x, y: y + 6, col: PLANET, text: `A drop of ${Math.round((1 - ev.to / ev.from) * 100)}%: ${formatCount(ev.from)} → ${formatCount(ev.to)} animal species` }); }
     endLabel(ctx, b.x1, b.Y(1) - 2, 'Earth', EARTH);
     endLabel(ctx, b.x1, Math.min(b.y1, pts[pts.length - 1][1] + 16), 'This planet', PLANET);
   },

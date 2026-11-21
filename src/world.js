@@ -7,6 +7,7 @@ import { mulberry32 } from './rng.js';
 import { storyByKey } from './science.js';
 import { Tectonics } from './tectonics.js';
 import { Civilization, CIV_STAGES } from './civ.js';
+import { estimateSpecies } from './richness.js';
 
 // The four eons of Earth's history. Time runs fast while only microbes live and slows down once
 // complex life appears, so the whole story fits into a game session.
@@ -268,8 +269,9 @@ export class World {
     KINGDOM_KEYS.forEach((k, i) => (kingdoms[k] = { species: 0, range: E.kRange ? E.kRange[i] : 0 }));
     for (const s of E.alive) kingdoms[E.slots[s].kingdom].species++;
     const lifeZones = E.lifeZones || 0;
+    const est = estimateSpecies(E, this.years);
     this.history.push({
-      tick: this.tick, years: this.years, bySpecies, kingdoms,
+      tick: this.tick, years: this.years, bySpecies, kingdoms, est: Math.round(est.total), estAnimals: Math.round(est.byKingdom.animal || 0),
       species: E.alive.length, lifeZones: lifeZones / E.Z,
       temp: P.meanT, o2: P.o2, co2: P.co2, eon: this.eon,
     });

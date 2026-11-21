@@ -96,6 +96,14 @@ Everything below emerges from the simulation. Nothing is scripted to happen at a
 - **Concentrating them.** Wet–dry cycles in **tidal pools** near coasts concentrate the molecules. Hot water, dry land and oxygen destroy them.
 - **The RNA world.** When a warm (5–50 °C) shallow sea stays rich in organics long enough, the RNA-world progress bar fills and **LUCA**, the first cell, appears. Use the Organics map view to see where chemistry is brewing.
 
+### How many species?
+The simulation follows up to 400 lineages at once (about 250 are usually alive). Earth has millions of species, so each lineage is read as a **clade**: a group of related species living in much the same way, named after a representative species. How many species it stands for is estimated (`richness.js`) from:
+- how rich its kind of life is on Earth today, shared among the lineages that group usually holds here (an assumption that calibrates the planet to Earth: an insect lineage stands for far more species than a whale lineage);
+- how far it has spread (√range, the species–area rule across regions);
+- how long its kind of life has had to diversify (clades fill out over tens of millions of years).
+
+The top bar, the Life tab and the zoo show these estimates, always rounded. A mature world usually holds 2–4 million species, a few million fewer than Earth's estimated 8–10 million, mostly because not every kind of life evolves on every planet.
+
 ### Ecology: populations, not individuals
 Each zone holds the biomass of every species living there:
 - **Food webs.** Predators choose their prey: hunters take animals about a third of their own size, filter-feeders much smaller ones, and well-defended prey (big, armoured, fast, flying) are both safer and poorer food. Each predator–prey link carries its own flow of food, so a predator that takes most of a common prey's losses is a **keystone species**. When one dies out, its prey can boom: a **trophic cascade**, reported in the chronicle.
@@ -164,7 +172,7 @@ Everything else (photosynthesis, multicellularity, animals, land plants, forests
 
 ### Is it like Earth?
 Nothing in the simulation is tuned to reproduce these patterns; the *Is it like Earth?* view (`earthcheck.js`, `earthview.js`) measures them in the running world and sets them beside Earth's:
-- **Diversity through time.** Animal species from the first animals to now, beside the fossil record of marine animal genera (the Cambrian explosion, the big five mass extinctions and the long rise since). The simulation's limit of 160 lineages at a time flattens its rise, so this one usually fails for now.
+- **Diversity through time.** Estimated animal species from the first animals to now, beside the fossil record of marine animal genera (the Cambrian explosion, the big five mass extinctions and the long rise since). The estimate rises as new kinds of animals appear and diversify, though usually less steeply than Earth's, so this one passes in some worlds and not others.
 - **Tropics to poles.** Species per zone by latitude. Warmth, productivity, mild seasons and more room let tropical zones hold several times the species of polar ones, as on Earth.
 - **Species and area.** Distinct species in growing neighbourhoods of zones, fitted to S = c·A^z. Earth's z is usually 0.15–0.35; worlds here come out about 0.2–0.27.
 - **Body sizes.** Most animal species should be small, with a long tail of giants. Many worlds pass, but their skew towards small species is weaker than Earth's (around half of animal species are small, against the great majority on Earth, where insects dominate).
@@ -192,6 +200,7 @@ src/sprites.js      procedural organism portraits drawn from each species' genom
 src/brain.js        tiny evolving neural-network brains, and reading behaviour from them
 src/microcosm.js    one zone simulated as individual animals with brains
 src/zoneview.js     the up-close view of a zone
+src/richness.js     how many real species each lineage stands for
 src/foodweb.js      the food-web view of a zone
 src/earthcheck.js   measures Earth's diversity patterns in a world (time, latitude, area, size, commonness)
 src/earthview.js    the "Is it like Earth?" charts
@@ -227,7 +236,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled, and [IDEAS.md](IDEAS.md) for what's next, including the plan to go deeper than SimEarth.
 
-Next on the list: realistic species numbers (a faster engine and more lineages), which should also let diversity keep rising through time as Earth's did.
+Next on the list: more behaviour up close (mating displays, and behaviour evolving in zones you aren't watching), and running the simulation on a background thread.
 
 ## License
 

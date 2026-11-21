@@ -113,6 +113,12 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
 - **Game:** `earthCheck(world)` measures each in the running world and gives a verdict (like Earth / unlike / not yet); `EarthView` charts them beside Earth's (two series in a colour pair validated for colour-blind separation on the dark panel, hover readouts, a table of numbers per chart). The headless tool prints the verdicts at the end of every run.
 - **What it found:** latitude (tropical zones hold 2–7× the species of polar ones), species–area (z ≈ 0.18–0.27) and commonness come out Earth-like untuned. Body sizes pass in about half of worlds (the check asks that at least half of animal species be small) and are less skewed towards small species than Earth's (about half small, not the great majority). Giving small animals finer niches and faster speciation was tried and made no consistent difference over eight worlds, so it was left out. Diversity through time levels off too early because of the lineage limit: that is item 7 in IDEAS.
 
+## 17. Realistic species numbers
+- **Real:** Earth holds an estimated 8–10 million species of eukaryotes (about 2 million described), most of them insects, fungi and other small things, plus untold microbes.
+- **Game:**
+  - `MAXT` is 400 lineage slots (was 160); every cap on group sizes and crowding scales with it (`LSCALE`). Slot numbers are stored as 16-bit, and saves record their slot count so older saves are re-indexed on load. The hot loops (the zone-by-zone population step, habitat suitability and dispersal) were tightened so that ~250 living lineages run at the old per-tick cost: hoisted lookups, no closures per species per zone, and no exponentials for zones far outside a species' temperature range.
+  - `richness.js` estimates the species in each lineage: `EARTH_SPECIES[group] / lineages the group usually holds × √(range / 120 zones) × (1 − 0.95·e^(−age/80 My))`, where age is how long its kind of life has existed. History samples store estimated totals, and the Earth check charts estimated animal species through time.
+
 ## Also built
 - A main menu with a scenario selector, options, load and continue, a pause menu (`menu.js`), and ending a run to take up to three species to the **zoo** (`zoo.js`): enclosures you can feed and play with, and full species profiles with ancestry
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)

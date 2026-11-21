@@ -4,6 +4,7 @@
 
 import { develop, ecology, describe, describeLooks, lookHeritage, heritageText, colourName, makeGenes, randomLooks, GENES, GENE_INFO, GI, NG, LOOK_GENES } from './genome.js';
 import { palette } from './sprites.js';
+import { lineageSpecies, formatCount } from './richness.js';
 import { idRng } from './save.js';
 import { drawOrganism } from './sprites.js';
 import { GRADES, KINGDOMS, TROPHIC_NAMES, HABITAT_NAMES, MAXT } from './ecosystem.js';
@@ -59,6 +60,7 @@ export function snapshot(world, sp) {
     keystone: !!sp.keystone, brain: sp.brain ? Array.from(sp.brain, (v) => Math.round(v * 1000) / 1000) : null, brainGens: sp.brainGens || 0,
     host: host ? { name: host.name, grade: host.grade } : null, eats, eatenBy, parasites,
     mimicOf: sp.mimic ? (E.species.get(sp.mimic)?.name || null) : null,
+    estSpecies: Math.round(lineageSpecies(E, sp, world.years)),
     planet: {
       seed: world.seed, years: world.years, eon: EONS[world.eon]?.name, species: E.alive.length, everSpecies: E.species.size,
       o2: world.planet.o2, temp: world.planet.meanT, civ: world.civ && !world.civ.fallen ? world.civ.info?.name : null,
@@ -252,6 +254,7 @@ export class ZooView {
           ['Planet', `seed ${s.planet?.seed}, ${formatYears(s.planet?.years || 0)} old (${s.planet?.eon || ''})`],
           ['Appeared', `${formatYears(s.bornYears || 0)}${s.allopatric ? ', when its population was cut off' : s.display ? ', split off by mate choice' : ''}`],
           ['Range', `${s.range} zones when you took it (peak ${s.peakRange})`],
+          ...(s.estSpecies ? [['Its clade', `about ${formatCount(s.estSpecies)} species (estimated)`]] : []),
           ['Its world', `${s.planet?.species} living species, ${s.planet?.everSpecies} ever; ${(s.planet?.o2 ?? 0).toFixed(0)}% oxygen, ${(s.planet?.temp ?? 0).toFixed(0)}°C${s.planet?.civ ? `; a civilization in the ${s.planet.civ}` : ''}`],
         ])}</dl></section>
         <section><h3>How it lives</h3><dl>${rows([
