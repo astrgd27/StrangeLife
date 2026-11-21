@@ -177,7 +177,7 @@ const CHARTS = {
   common(ctx, box, c, hits) {
     const low = Math.min(-4, Math.floor(Math.min(...c.pts.map((p) => p[1])))), b = scale(box, 0, 1, low, 0.15);
     const yt = []; for (let v = 0; v >= low; v -= 1) yt.push([v, v === 0 ? '1' : `1/${10 ** -v >= 1000 ? `${10 ** (-v - 3)}k` : 10 ** -v}`]);
-    axes(ctx, b, yt, [[0, 'commonest'], [0.5, 'rank →'], [1, 'rarest']], 'abundance');
+    axes(ctx, b, yt, [[0, 'commonest'], [0.5, 'rank →'], [1, 'rarest']]);
     const e = []; for (let r = 0.005; r <= 0.995; r += 0.01) e.push([b.X(r), b.Y(Math.max(low, earthRank(r))), r]);
     line(ctx, e.map(([x, y]) => [x, y]), EARTH);
     for (let k = 0; k < e.length; k += 10) hits.push({ x: e[k][0], y: e[k][1], col: EARTH, text: `Earth (log-normal): rank ${Math.round(e[k][2] * 100)}%, ${(10 ** earthRank(e[k][2])).toPrecision(2)}× the commonest` });
