@@ -46,15 +46,15 @@ export const GENE_INFO = {
   climbing: 'Climbs other plants to reach the light, like vines and orchids',
   parasitism: 'Lives on or in one host species and feeds on it',
   symbiosis: 'Partners with microbes: algae in corals, gut microbes in grazers, nitrogen-fixing bacteria in plant roots',
-  toxins: 'Chemical defences that make a plant poor food for most grazers',
+  toxins: 'Chemical defences: a plant that most grazers avoid, or a poisonous animal (poison frogs, monarch butterflies, ladybirds)',
   care: 'Few young, well looked after (high), or many young left to chance (low)',
   metamorphosis: 'Young (larvae, tadpoles) live a different life from the adults',
   sociality: 'Lives in colonies with workers and queens (insects), or in herds and packs',
   migration: 'Travels with the seasons to escape winters and follow food',
   accent: 'Second colour, for markings and ornaments (looks only)',
-  shade: 'Dark or pale colouring (looks only)',
-  pattern: 'Markings: plain, spots, stripes, bands, mottling, a dark back, eyespots (looks only)',
-  patternSize: 'Fine or bold markings (looks only)',
+  shade: 'Dark or pale colouring',
+  pattern: 'Markings: plain, spots, stripes, bands, mottling, rosettes, patches… (in animals, camouflage or warning)',
+  patternSize: 'Fine or bold markings (bold ones are conspicuous)',
   ornament: 'Which ornament: crests, horns, frills, plumes, sails… (looks only)',
   ornamentSize: 'How big the ornament grows; showy species grow bigger ones (looks only)',
   build: 'Slender or stout build; in plants, the shape of the crown (looks only)',
@@ -184,6 +184,40 @@ export function heritageText(h, esc = (x) => x) {
   return h.map((x) => `${x.what.charAt(0).toUpperCase() + x.what.slice(1)}: ${x.n ? `inherited, shared by ${x.n} ancestral species back to <i>${esc(x.from.name)}</i>` : 'new in this species'}`).join('<br>');
 }
 
+// ---------- colours that predators see ----------
+
+const BOLD = new Set(['spots', 'stripes', 'bands', 'eyespots', 'rosettes', 'chevrons', 'two-tone', 'saddle']);
+const CRYPTIC = new Set(['plain', 'mottled', 'speckles', 'dark back', 'patches']);
+// how poisonous, how conspicuous and how well hidden an animal is; warning = poison × conspicuousness
+export function colouration(sp, ph = sp.ph) {
+  if (!ph?.animal || ph.level < 3 || sp.trophic === 6) return null;
+  const L = looks(sp), disp = sp.genes[GI.display];
+  const tox = clamp01((ph.poison - 0.4) / 0.45);
+  const conspic = clamp01(0.7 * disp + (BOLD.has(L.pattern) ? 0.15 + 0.25 * L.patSize : 0));
+  const crypsis = clamp01((1 - disp) * (CRYPTIC.has(L.pattern) ? 1 : 0.55) - 0.1);
+  // (poisonous prey are spat out even if drab, but predators learn to avoid them far faster when
+  // they are conspicuous)
+  return { tox, conspic, crypsis, warning: tox * (0.35 + 0.65 * conspic) };
+}
+
+// how alike two species look to a predator (0..1): colours, markings, showiness
+export function lookSimilarity(a, b) {
+  const A = looks(a), B = looks(b);
+  const circ = (x, y) => { const d = Math.abs(x - y) % 1; return Math.min(d, 1 - d) * 2; };
+  const d = 0.32 * circ(A.hue, B.hue) + 0.14 * circ(A.accent, B.accent) + 0.24 * (A.pattern === B.pattern ? 0 : 1)
+    + 0.1 * Math.abs(A.patSize - B.patSize) + 0.1 * Math.abs(a.genes[GI.display] - b.genes[GI.display]) + 0.1 * Math.abs(A.shade - B.shade);
+  return clamp01(1 - 1.6 * d);
+}
+
+// selection for resembling a model: a daughter species' looks move part of the way towards it
+export function convergeLooks(g, model, rng, k = 0.5) {
+  for (const key of ['hue', 'accent', 'pattern', 'patternSize', 'display', 'shade']) {
+    const i = GI[key], t = k * (0.6 + 0.8 * rng());
+    if (key === 'hue' || key === 'accent') { let d = model[i] - g[i]; if (d > 0.5) d -= 1; if (d < -0.5) d += 1; g[i] = (((g[i] + d * t) % 1) + 1) % 1; }
+    else g[i] = clamp01(g[i] + (model[i] - g[i]) * t);
+  }
+}
+
 const COLOUR_NAMES = [[0.03, 'red'], [0.08, 'orange'], [0.14, 'golden'], [0.2, 'yellow'], [0.3, 'lime'], [0.42, 'green'], [0.5, 'teal'], [0.58, 'sky-blue'], [0.68, 'blue'], [0.76, 'violet'], [0.86, 'purple'], [0.95, 'pink'], [1.01, 'red']];
 export function colourName(h, s = 0.6, l = 0.5) {
   if (l < 0.18) return 'black';
@@ -270,6 +304,7 @@ export function develop(sp) {
     size, endo, brain, flying, vascular, sapient, covering, armour, shelled, parasite, partner,
     succulence: plant ? G('succulence') : 0, climbing: plant ? G('climbing') : 0,
     toxins: plant ? G('toxins') : 0,
+    poison: animal && level === 3 && trophic !== 6 ? G('toxins') : 0,
     care: animal && level === 3 ? G('care') : 0,
     metamorphosis: animal && level === 3 && (skeleton === 'exo' || covering === 'skin' || skeleton === 'none') ? G('metamorphosis') : 0,
     sociality: animal && level === 3 ? G('sociality') : 0,
@@ -385,6 +420,7 @@ export function describe(ph) {
     if (ph.brain > 0.6) parts.push(ph.brain > 0.85 ? 'large brain' : 'brain');
     if (!ph.motile) parts.push('sessile');
   }
+  if (ph.poison > 0.6) parts.push('poisonous');
   if (ph.lichen) parts.push('a fungus farming algae');
   if (ph.parasite) parts.push('parasite');
   if (ph.partner) parts.push(ph.partner === 'algae' ? 'algae partners' : ph.partner === 'gut' ? 'gut microbes' : 'nitrogen-fixing roots');
@@ -487,6 +523,15 @@ export function ecology(sp, ph) {
     if (ph.shelled) p.vuln *= 0.6;
     if (p.socialDefence) p.vuln /= 1 + p.socialDefence;
   }
+  // Colours that matter to predators. Poisonous prey that look it are avoided (predators learn
+  // warning colours); drab, mottled prey are hard to spot; showy prey that are good to eat get
+  // found and eaten. Making poisons costs a little.
+  const col = colouration(sp, ph);
+  if (col) {
+    Object.assign(p, col);
+    p.m *= 1 + 0.02 * col.tox;
+    p.vuln *= (1 - 0.7 * col.warning) * (1 - 0.3 * col.crypsis) * (1 + 0.25 * col.conspic * (1 - col.tox));
+  }
   // Winters: how well it rides out a harsh season. Microbes and plants go dormant, cold-blooded
   // animals go torpid, fur and feathers keep warm-blooded animals going, and migrants just leave.
   p.hardy = !ph.euk ? 0.8 : ph.plant || ph.fungus || ph.lichen ? 0.6 : ph.level <= 1 ? 0.7
@@ -563,6 +608,8 @@ export function evolvable(sp, ph) {
     care: ph.skeleton === 'endo' ? 1.2 : 0.4,
     metamorphosis: ph.skeleton === 'exo' || ph.covering === 'skin' || ph.skeleton === 'none' ? 1 : 0,
     sociality: ph.skeleton === 'exo' && ph.limbs === 3 ? key('sociality', 0.6, 2.2) : ph.skeleton === 'endo' ? 0.6 : 0,
+    // poisons: poison frogs, toads, ladybirds, monarchs, pufferfish, sea slugs
+    toxins: sp.trophic === 6 ? 0 : ph.skeleton === 'endo' ? 0.7 : 1.1,
     migration: ph.flying || ph.skeleton === 'endo' ? 1 : 0.3,
   };
 }
@@ -607,7 +654,7 @@ export const ARCHETYPES = {
   sponge: A({ adhesion: 0.7, differentiation: 0.3, ingest: 0.7, carnivory: 0.2, motility: 0.1, size: 0.5, symmetry: 0.2, symbiosis: 0.7 }),
   jelly: A({ adhesion: 0.7, differentiation: 0.4, ingest: 0.7, carnivory: 0.8, motility: 0.5, size: 0.4, symmetry: 0.2, segments: 0.5 }),
   worm: A({ adhesion: 0.75, differentiation: 0.6, ingest: 0.7, carnivory: 0.2, motility: 0.5, size: 0.3, symmetry: 0.8, segments: 0.8 }),
-  mollusc: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.7, carnivory: 0.2, motility: 0.4, size: 0.4, symmetry: 0.8, segments: 0.1, skeleton: 0.12 }),
+  mollusc: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.7, carnivory: 0.2, motility: 0.4, size: 0.4, symmetry: 0.8, segments: 0.1, skeleton: 0.12, toxins: 0.3 }),
   squid: A({ adhesion: 0.8, differentiation: 0.8, ingest: 0.8, carnivory: 0.9, motility: 0.8, size: 0.6, symmetry: 0.8, segments: 0.8, skeleton: 0.5, brain: 0.7 }),
   arthropod: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.3, motility: 0.6, size: 0.4, symmetry: 0.85, segments: 0.6, limbs: 0.75, skeleton: 0.12 }),
   diatom: A({ adhesion: 0.2, photo: 0.8, size: 0.5, skeleton: 0.12 }, 'eukaryote', true, true),
@@ -631,9 +678,9 @@ export const ARCHETYPES = {
   ungulate: vert({ carnivory: 0.1, motility: 0.8, size: 0.6, covering: 0.08, endothermy: 0.8, brain: 0.5, symbiosis: 0.75, care: 0.8, sociality: 0.65, migration: 0.45 }),
   carnivoran: vert({ carnivory: 0.85, motility: 0.8, size: 0.45, covering: 0.08, endothermy: 0.8, brain: 0.6, care: 0.85, sociality: 0.5 }),
   primate: vert({ carnivory: 0.45, motility: 0.7, size: 0.4, covering: 0.08, endothermy: 0.8, brain: 0.78, care: 0.9, sociality: 0.7 }),
-  insect: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.2, motility: 0.6, size: 0.25, symmetry: 0.85, segments: 0.3, limbs: 0.75, skeleton: 0.12, landAdapt: 0.75, wings: 0.7, metamorphosis: 0.75 }),
+  insect: A({ adhesion: 0.8, differentiation: 0.7, ingest: 0.75, carnivory: 0.2, motility: 0.6, size: 0.25, symmetry: 0.85, segments: 0.3, limbs: 0.75, skeleton: 0.12, landAdapt: 0.75, wings: 0.7, metamorphosis: 0.75, toxins: 0.35 }),
   fish: A({ adhesion: 0.85, differentiation: 0.8, ingest: 0.75, carnivory: 0.3, motility: 0.75, size: 0.4, symmetry: 0.85, segments: 0.3, limbs: 0.5, skeleton: 0.88, brain: 0.3, covering: 0.6, care: 0.15 }),
-  amphibian: A({ adhesion: 0.85, differentiation: 0.8, ingest: 0.75, carnivory: 0.8, motility: 0.6, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.55, brain: 0.35, covering: 0.32, metamorphosis: 0.8 }),
+  amphibian: A({ adhesion: 0.85, differentiation: 0.8, ingest: 0.75, carnivory: 0.8, motility: 0.6, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.55, brain: 0.35, covering: 0.32, metamorphosis: 0.8, toxins: 0.4 }),
   reptile: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.6, size: 0.45, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, brain: 0.4, covering: 0.6, care: 0.3 }),
   mammal: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.2, motility: 0.7, size: 0.45, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.55, covering: 0.08, care: 0.8 }),
   bird: A({ adhesion: 0.85, differentiation: 0.85, ingest: 0.75, carnivory: 0.3, motility: 0.8, size: 0.3, symmetry: 0.85, segments: 0.2, limbs: 0.5, skeleton: 0.88, landAdapt: 0.8, endothermy: 0.8, brain: 0.5, wings: 0.85, display: 0.7, covering: 0.9, care: 0.85, migration: 0.65 }),

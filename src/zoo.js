@@ -58,6 +58,7 @@ export function snapshot(world, sp) {
     range: sp.range, peakRange: sp.peakRange, island: !!sp.island, allopatric: !!sp.allopatric, display: !!sp.display,
     keystone: !!sp.keystone, brain: sp.brain ? Array.from(sp.brain, (v) => Math.round(v * 1000) / 1000) : null, brainGens: sp.brainGens || 0,
     host: host ? { name: host.name, grade: host.grade } : null, eats, eatenBy, parasites,
+    mimicOf: sp.mimic ? (E.species.get(sp.mimic)?.name || null) : null,
     planet: {
       seed: world.seed, years: world.years, eon: EONS[world.eon]?.name, species: E.alive.length, everSpecies: E.species.size,
       o2: world.planet.o2, temp: world.planet.meanT, civ: world.civ && !world.civ.fallen ? world.civ.info?.name : null,
@@ -207,6 +208,16 @@ export class ZooView {
       if (ph.sociality > 0.6) life.push(['Social life', ph.skeleton === 'endo' ? 'Lives in groups' : 'Colonies with a queen and workers']);
     }
     if (ph.toxins > 0.6) life.push(['Defences', 'Toxic to most grazers']);
+    const cc = eco.warning !== undefined ? eco : null;
+    if (cc) {
+      const d = [];
+      if (cc.warning > 0.3 && cc.conspic > 0.5) d.push('Poisonous, with warning colours predators learn to avoid');
+      else if (ph.poison > 0.6) d.push('Poisonous, but drab: predators find out too late');
+      if (s.mimicOf) d.push(`Mimics the poisonous <i>${esc(s.mimicOf)}</i>, so predators leave it alone`);
+      else if (cc.crypsis > 0.55 && cc.warning <= 0.3) d.push('Camouflaged: hard for predators to spot');
+      else if (cc.conspic > 0.6 && cc.tox <= 0.3) d.push('Conspicuous: showy, and easy for predators to find');
+      if (d.length) life.push(['Colours', d.join('; ')]);
+    }
     if (ph.partner) life.push(['Partners', { algae: 'Algae living in its tissues', gut: 'Gut microbes that digest plants', roots: 'Nitrogen-fixing root bacteria' }[ph.partner]]);
     let behaviour = '';
     if (s.brain) {
@@ -269,7 +280,7 @@ export class ZooView {
       <section><h3>Its looks</h3>
         <p><span class="swatch" style="background:${C.body}"></span> ${col(C.body)}, <span class="swatch" style="background:${C.accent}"></span> ${col(C.accent)} markings${describeLooks(sp) ? ` · ${esc(describeLooks(sp))}` : ''}</p>
         ${heritage.length ? `<p class="muted small">${heritageText(heritage, esc)}</p>` : ''}
-        <p class="muted small">Looks are inherited like any other genes but don't affect survival, so they drift from parent to daughter species: relatives share a family look, and mate choice can give a new species new markings and ornaments.</p>
+        <p class="muted small">Looks are inherited like any other genes. Most just drift from parent to daughter species, so relatives share a family look, and mate choice can give a new species new markings and ornaments. In animals, predators notice colours and markings: drab, mottled ones hide, bright ones protect poisonous species, and look-alikes share that protection.</p>
         <div class="genome looks-genes">${lookBars}</div></section>
       <section><h3>Genome</h3><div class="genome prof-genome">${genes}</div></section>
       <section><h3>Its ancestry: ${path.length > 2 ? `${path.length - 1} changes of body plan` : path.length === 2 ? 'one change of body plan' : 'no change of body plan'} since ${path[0] ? (GRADES[path[0].grade]?.name || path[0].grade).toLowerCase() : 'the beginning'}</h3>

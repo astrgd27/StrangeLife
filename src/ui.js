@@ -198,6 +198,8 @@ export class UI {
         metamorphosis: () => `${sp.icon} The young of ${sp.name} live a different life from the adults: metamorphosis.`,
         migration: () => `${sp.icon} ${sp.name} migrates with the seasons, escaping the winters.`,
         fire: () => '🔥 Wildfires sweep the dry lands: with enough oxygen in the air, plants burn.',
+        aposematism: () => `${sp.icon} ${sp.name} is poisonous and shows it: the first warning colours.`,
+        mimicry: () => `${sp.icon} ${sp.name} has come to look like the poisonous ${e.model?.name || 'species it lives beside'}, and predators leave it alone: the first mimic.`,
       }[e.key]?.();
       if (txt) this.chronicle(e.tick, txt);
       this.firstCard(e.key, sp ? { img: spriteURL(sp, 96), caption: `${sp.name}: ${sp.body}`, tick: e.tick } : {});
@@ -344,7 +346,7 @@ export class UI {
           ${sp.host && E.species.get(sp.host) ? `<dt>${sp.trophic === 6 ? 'Host' : 'Specialist'}</dt><dd>${sp.trophic === 6 ? 'Lives in' : 'Feeds on'} ${E.species.get(sp.host).icon} <i>${esc(E.species.get(sp.host).name)}</i>${E.species.get(sp.host).died >= 0 ? ' (extinct)' : ''}</dd>` : ''}
           ${sp.island ? '<dt>Island</dt><dd>Evolved on an island; found nowhere else</dd>' : ''}
           <dt>Needs O₂</dt><dd>${sp.eco?.o2 ? `${sp.eco.o2.toFixed(1)}% or more` : 'none (anaerobic)'}</dd>
-          ${sp.trophic !== 1 && sp.eco && sp.ph?.animal ? `<dt>Defences</dt><dd>${defenceText(sp)}</dd>` : ''}
+          ${sp.trophic !== 1 && sp.eco && sp.ph?.animal ? `<dt>Defences</dt><dd>${defenceText(sp, E)}</dd>` : ''}
           <dt>Reproduction</dt><dd>${sp.sexual ? 'Sexual' : 'Asexual (cloning or splitting)'}</dd>
           ${sp.ph?.animal && sp.trophic !== 6 ? `<dt>Behaviour</dt><dd>${behaviourText(sp)}</dd>` : ''}
           ${lifeText(sp)}
@@ -362,7 +364,7 @@ export class UI {
           <span class="tag h${sp.habitat}">${HABITAT_NAMES[sp.habitat]}</span>
           ${sp.pref < 2 ? '<span class="tag h0">Cold-adapted</span>' : sp.pref > 30 ? '<span class="tag t5">Heat-loving</span>' : ''}
           ${nicheTags(sp)}
-          ${sp.host && sp.trophic !== 6 ? '<span class="tag t3">Specialist</span>' : ''}${sp.keystone ? '<span class="tag key">Keystone</span>' : ''}${sp.ph?.toxins > 0.6 ? '<span class="tag t6">Toxic</span>' : ''}${sp.ph?.sociality > 0.6 ? `<span class="tag">${sp.ph.skeleton === 'endo' ? 'Herds' : 'Colonies'}</span>` : ''}${sp.ph?.metamorphosis > 0.6 ? '<span class="tag">Metamorphosis</span>' : ''}${sp.ph?.partner ? '<span class="tag mut">Partners</span>' : ''}${sp.island ? '<span class="tag h1">Island</span>' : ''}${sp.range > 0 && sp.range <= 15 ? '<span class="tag">Endemic</span>' : ''}
+          ${sp.host && sp.trophic !== 6 ? '<span class="tag t3">Specialist</span>' : ''}${sp.keystone ? '<span class="tag key">Keystone</span>' : ''}${sp.ph?.toxins > 0.6 ? '<span class="tag t6">Toxic</span>' : ''}${(sp.eco?.warning || 0) > 0.3 && sp.eco.conspic > 0.5 ? '<span class="tag t6">Warning colours</span>' : sp.ph?.poison > 0.6 ? '<span class="tag t6">Poisonous</span>' : ''}${sp.mimic ? '<span class="tag key">Mimic</span>' : (sp.eco?.crypsis || 0) > 0.55 ? '<span class="tag">Camouflaged</span>' : ''}${sp.ph?.sociality > 0.6 ? `<span class="tag">${sp.ph.skeleton === 'endo' ? 'Herds' : 'Colonies'}</span>` : ''}${sp.ph?.metamorphosis > 0.6 ? '<span class="tag">Metamorphosis</span>' : ''}${sp.ph?.partner ? '<span class="tag mut">Partners</span>' : ''}${sp.island ? '<span class="tag h1">Island</span>' : ''}${sp.range > 0 && sp.range <= 15 ? '<span class="tag">Endemic</span>' : ''}
         </span>${detail}</li>`;
     });
     setHTML($('species-list'), rows.join('') || '<li class="muted small">None living.</li>');
@@ -592,8 +594,14 @@ function emptyChart(ctx, w, h) {
 
 export { MAXT };
 
-function defenceText(sp) {
-  const ph = sp.ph, out = [];
+function defenceText(sp, E) {
+  const ph = sp.ph, out = [], c = sp.eco;
+  const model = sp.mimic && E ? E.species.get(sp.mimic) : null;
+  if (c.warning > 0.3 && c.conspic > 0.5) out.push('poisonous, with warning colours');
+  else if (ph.poison > 0.6) out.push(model ? 'poisonous' : 'poisonous (but drab: predators find out too late)');
+  if (model) out.push(`looks like the poisonous <i>${esc(model.name)}</i>${ph.poison > 0.6 ? ', so they share the warning' : ''}`);
+  else if (c.crypsis > 0.55 && !(c.warning > 0.3)) out.push('camouflaged');
+  else if (c.conspic > 0.6 && !(c.tox > 0.3)) out.push('conspicuous');
   if (ph.size > 0.5) out.push('large');
   if (ph.skeleton === 'exo') out.push(ph.limbs ? 'armoured' : 'shelled');
   if (ph.flying) out.push('flies');

@@ -21,7 +21,7 @@ import { makeGeodesicGrid } from './planet.js';
 import { gaussian } from './rng.js';
 import { genusName, speciesEpithet } from './names.js';
 import { probe } from './brain.js';
-import { FAMILY, GI, ARCHETYPES, develop, classify, ecology, mutate, innovate, evolvable, makeGenes, setDiet, storyKeysFor, describe, randomLooks, sexualLooks, LOOK_GENES } from './genome.js';
+import { FAMILY, GI, ARCHETYPES, develop, classify, ecology, mutate, innovate, evolvable, makeGenes, setDiet, storyKeysFor, describe, randomLooks, sexualLooks, LOOK_GENES, lookSimilarity, convergeLooks } from './genome.js';
 
 export const ZONE_LEVEL = 4;
 const MAXT = 160;            // species slots
@@ -118,7 +118,9 @@ export function nicheTol(grade) {
 // Niche bins for diversity-dependence and competitive exclusion: same group, habitat, diet,
 // ~8 °C temperature band, rainfall/depth third, and host plant.
 function nicheKey(sp) {
-  return `${sp.grade}|${sp.habitat}|${sp.trophic}|${Math.floor((sp.pref + 40) / 8)}|${Math.min(2, Math.floor(sp.n2 * 3))}|${sp.host || 0}`;
+  // (chemically defended animals count as a niche of their own: they often feed differently, as
+  // poison frogs get their poisons from eating ants)
+  return `${sp.grade}|${sp.habitat}|${sp.trophic}|${Math.floor((sp.pref + 40) / 8)}|${Math.min(2, Math.floor(sp.n2 * 3))}|${sp.host || 0}${sp.ph?.poison > 0.6 ? '|P' : ''}`;
 }
 
 // How many species a single group (e.g. seaweeds, insects) tends to hold before its splitting
@@ -130,8 +132,9 @@ const GRADE_CAP = { insect: 22, fish: 16, arthropod: 14, sponge: 7, jelly: 7, cy
 // judged against that when competition decides who is squeezed out
 const abundance = (sp) => sp.total * (sp.habitat === 3 ? 3 : 1) * (sp.trophic === 6 ? 30 : 1);
 // parasites are counted as their own group (parasitic worms apart from free-living ones)
-const gkey = (sp) => (sp.trophic === 6 ? sp.grade + '*' : sp.grade);
-const capOf = (key) => (key.endsWith('*') ? 10 : GRADE_CAP[key] ?? GROUP_CAP[GRADES[key].kingdom]);
+// (and so are poisonous animals, which crowd out only each other)
+const gkey = (sp) => (sp.trophic === 6 ? sp.grade + '*' : sp.ph?.poison > 0.6 ? sp.grade + '!' : sp.grade);
+const capOf = (key) => (key.endsWith('*') ? 10 : key.endsWith('!') ? 6 : GRADE_CAP[key] ?? GROUP_CAP[GRADES[key].kingdom]);
 
 // how strongly mate choice drives speciation (birds and fish are famous for it)
 // (scaled by each species' display gene: showy colours, songs and dances)
@@ -209,7 +212,7 @@ export class Ecosystem {
     this.wChem = new Float32Array(MAXT); this.wMicro = new Float32Array(MAXT); this.wProd = new Float32Array(MAXT);
     this.wHerb = new Float32Array(MAXT); this.wDet = new Float32Array(MAXT);
     this.tKing = new Int8Array(MAXT);
-    this.tDry = new Float32Array(MAXT); this.tVuln = new Float32Array(MAXT).fill(1);
+    this.tDry = new Float32Array(MAXT); this.tVuln = new Float32Array(MAXT).fill(1); this.tVuln0 = new Float32Array(MAXT).fill(1);
     this.tSucc = new Float32Array(MAXT); this.tClimb = new Float32Array(MAXT); this.tRock = new Uint8Array(MAXT);
     this.tCoral = new Uint8Array(MAXT); this.tRoots = new Uint8Array(MAXT);
     // plant defences and fire: how palatable each plant is to generalist grazers, how well it
@@ -431,6 +434,9 @@ export class Ecosystem {
       this.tImax[s] *= Math.max(0.85, Math.min(1.2, 1 + 0.35 * (f - 0.4)));
       this.tVuln[s] *= Math.max(0.7, Math.min(1.15, 1 - 0.35 * (k.evade - 0.3) - (k.herd > 0.3 ? 0.1 : 0)));
     }
+    // mimics share their model's protection (worked out in updateMimicry)
+    this.tVuln0[s] = this.tVuln[s];
+    this.tVuln[s] *= 1 - 0.5 * (sp.mimicP || 0);
     // specialists are efficient on their one host plant and can't use anything else
     const host = sp.host ? this.species.get(sp.host) : null;
     this.tHost[s] = host && host.died < 0 ? host.slot : -1;
@@ -993,7 +999,14 @@ export class Ecosystem {
       const sp = insects[Math.floor(rng() * insects.length)];
       if (sp) { const z = this.pickZone(sp); if (z >= 0) this.speciate(sp, sp.grade, z, null, 'social'); }
     }
-    if (this.tick % 50 === 0) this.analyseWeb();
+    // Poisons: now and then a prey animal that predators hunt takes up a chemical defence (often
+    // from what it eats, as poison frogs and monarchs do), and with it, bright warning colours
+    if (nA < SPEC_CAP && rng() < 0.004 * this.transitionRate) {
+      const prey = this.alive.map((q) => this.slots[q]).filter((q) => q.ph?.animal && q.ph.level === 3 && q.trophic !== TROPHIC.PARASITE && q.trophic !== TROPHIC.PREDATOR && q.range >= 8 && q.ph.poison < 0.6);
+      const sp = prey[Math.floor(rng() * prey.length)];
+      if (sp) { const z = this.pickZone(sp); if (z >= 0) this.speciate(sp, sp.grade, z, null, 'poison'); }
+    }
+    if (this.tick % 50 === 0) { this.analyseWeb(); this.updateMimicry(); }
     // Background turnover: a crowded biosphere keeps losing its rarest species, so there is always
     // room for new ones and evolution never stalls at the species limit
     if (nA > SOFT_CAP + 10 && rng() < 0.012 * (nA - SOFT_CAP - 10) / 10) {
@@ -1188,12 +1201,26 @@ export class Ecosystem {
     let habitat = sp.habitat;
     let genes = mutate(sp.genes, rng, gaussian, sexualSel ? 0.3 : this.mutationRate, evolvable(sp, sp.ph));
     let domain = sp.domain, mito = sp.mito, chloro = sp.chloro, lichen = sp.lichen;
+    // predators select on looks: a species living beside a poisonous model tends to come to look
+    // like it (mimicry), and a poisonous species tends to become conspicuous (warning colours)
+    if (!transition && sp.ph?.animal && sp.ph.level === 3) {
+      const model = sp.modelId ? this.species.get(sp.modelId) : null;
+      if (model && model.died < 0 && rng() < 0.35) convergeLooks(genes, model.genes, rng, 0.45);
+      else if ((sp.eco?.tox || 0) > 0.4 && (sp.eco?.conspic || 0) < 0.7 && rng() < 0.3) {
+        genes[GI.display] = Math.min(1, genes[GI.display] + 0.12 + 0.1 * rng());
+        genes[GI.patternSize] = Math.min(1, genes[GI.patternSize] + 0.1);
+      }
+    }
     if (sexualSel) {
       // speciation by mate choice: same niche, a new courtship display and colours
       genes[GI.display] = Math.min(1, genes[GI.display] + 0.1);
       sexualLooks(genes, rng, gaussian);
     } else if (mode === 'colonise') {
       habitat = 3;
+    } else if (mode === 'poison') {
+      genes[GI.toxins] = 0.75 + 0.2 * rng();
+      // usually advertised with bold colours; sometimes kept hidden
+      if (rng() < 0.7) { genes[GI.display] = Math.min(1, genes[GI.display] + 0.35 + 0.2 * rng()); genes[GI.patternSize] = Math.min(1, genes[GI.patternSize] + 0.25); if (genes[GI.pattern] < 0.14) genes[GI.pattern] = 0.15 + 0.3 * rng(); }
     } else if (mode === 'social') {
       genes[GI.sociality] = 0.65 + 0.25 * rng();
     } else if (mode === 'parasite') {
@@ -1295,7 +1322,7 @@ export class Ecosystem {
     // firsts in the web of life
     if (sp.trophic === TROPHIC.PARASITE && !this.innovations.has('parasites')) { this.innovations.add('parasites'); this.onEvent({ type: 'firstof', key: 'parasites', species: sp }); }
     if (sp.ph?.partner === 'algae' && !this.innovations.has('corals')) { this.innovations.add('corals'); this.onEvent({ type: 'firstof', key: 'corals', species: sp }); }
-    for (const [key, ok] of [['toxins', sp.ph?.toxins > 0.6], ['care', sp.ph?.care > 0.6 && sp.ph?.animal], ['metamorphosis', sp.ph?.metamorphosis > 0.6], ['migration', sp.ph?.migration > 0.6]]) {
+    for (const [key, ok] of [['toxins', sp.ph?.toxins > 0.6], ['care', sp.ph?.care > 0.6 && sp.ph?.animal], ['metamorphosis', sp.ph?.metamorphosis > 0.6], ['migration', sp.ph?.migration > 0.6], ['aposematism', (sp.eco?.warning || 0) > 0.35 && sp.eco.conspic > 0.5]]) {
       if (ok && !this.innovations.has(key)) { this.innovations.add(key); this.onEvent({ type: 'firstof', key, species: sp }); }
     }
     if (sp.ph?.partner === 'gut' && !this.innovations.has('gut')) { this.innovations.add('gut'); this.onEvent({ type: 'firstof', key: 'gut', species: sp }); }
@@ -1447,6 +1474,50 @@ export class Ecosystem {
       if (best && ratio > 1.5) this.onEvent({ type: 'cascade', species: c.pred, prey: best, ratio });
       return false;
     });
+  }
+
+  // Warning colours and mimicry. Poisonous animals that look it are models; any animal living
+  // alongside one, of about the same size, that looks like it is partly protected too, because
+  // predators that learned to avoid the model avoid it as well (Batesian mimicry if it is good to
+  // eat, Müllerian if it is poisonous too). Each animal also remembers the model it could most
+  // profit from copying, which steers how its daughter species' looks evolve (speciate).
+  updateMimicry() {
+    const Z = this.Z, B = this.B, alive = this.alive;
+    const models = alive.filter((s) => (this.slots[s].eco?.warning || 0) > 0.3 && this.slots[s].eco.conspic > 0.5);
+    for (const s of alive) { const sp = this.slots[s]; if (sp.mimicP || sp.mimic || sp.modelId) { sp.mimicP = 0; sp.mimic = 0; sp.modelId = 0; this.tVuln[s] = this.tVuln0[s]; } }
+    if (!models.length) return;
+    // how many of each animal's zones each model shares
+    const nm = models.length, share = new Float32Array(MAXT * nm), occ = new Float32Array(MAXT), here = new Uint8Array(nm);
+    for (let z = 0; z < Z; z++) {
+      let any = 0;
+      for (let k = 0; k < nm; k++) { here[k] = B[z * MAXT + models[k]] > 1e-4 ? 1 : 0; any |= here[k]; }
+      for (let a = 0; a < this.presN[z]; a++) {
+        const s = this.pres[z * MAXT + a];
+        if (B[z * MAXT + s] < 1e-4) continue;
+        occ[s]++;
+        if (any) for (let k = 0; k < nm; k++) if (here[k]) share[s * nm + k]++;
+      }
+    }
+    for (const s of alive) {
+      const sp = this.slots[s];
+      if (!sp.ph?.animal || sp.ph.level < 3 || sp.trophic === TROPHIC.PARASITE || !occ[s]) continue;
+      let best = 0, bestM = null, pot = 0;
+      for (let k = 0; k < nm; k++) {
+        const m = models[k], M = this.slots[m];
+        if (m === s || !share[s * nm + k] || Math.abs(M.size - sp.size) > 0.25 || M.habitat !== sp.habitat && (M.habitat === 0) !== (sp.habitat === 0)) continue;
+        const ov = share[s * nm + k] / occ[s], sim = lookSimilarity(sp, M);
+        const prot = M.eco.warning * Math.max(0, (sim - 0.55) / 0.45) * ov;
+        if (prot > best) { best = prot; bestM = M; }
+        if (M.eco.warning * ov > pot) { pot = M.eco.warning * ov; sp.modelId = M.id; }
+      }
+      sp.mimicP = Math.min(0.9, best);
+      sp.mimic = bestM && best > 0.15 ? bestM.id : 0;
+      this.tVuln[s] = this.tVuln0[s] * (1 - 0.5 * sp.mimicP);
+      if (sp.mimic && (sp.eco.tox || 0) < 0.3 && sp.estab && !this.innovations.has('mimicry')) {
+        this.innovations.add('mimicry');
+        this.onEvent({ type: 'firstof', key: 'mimicry', species: sp, model: bestM });
+      }
+    }
   }
 
   // Biogeographic realms: group zones by which species they share (k-means on species lists),

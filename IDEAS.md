@@ -109,7 +109,7 @@ Ordered by how much Earth-like variety each adds for the effort.
    - **A "realms" map view:** zones grouped by shared species, showing continents with their own faunas (marsupials in Australia, Wallace's Line).
 6. **Checking it against Earth.** Diversity through time (the fossil-record curve), the tropics-to-poles gradient, the species–area relationship, body-size distributions.
 7. **Realistic species numbers.** Estimate how many species each simulated lineage holds (from range, habitat variety and body size) for Earth-scale totals, and raise the lineage limit with a faster engine on a background thread.
-8. ✅ (looks) **Inherited looks.** (Built: colours, markings, ornaments and proportions passed down and drifting, drawn for every body plan.) Next: warning colours that actually warn (toxic animals that predators learn to avoid), mimicry, and camouflage that matches the ground.
+8. ✅ (looks) **Inherited looks.** (Built: colours, markings, ornaments and proportions passed down and drifting, drawn for every body plan.) ✅ Warning colours, camouflage and mimicry (built at the species level). Next: camouflage that matches the local ground, and predators in the up-close view that learn which prey to avoid.
 9. **More behaviour up close.** Mating displays, warning colours and mimicry, camouflage, and behaviour evolving in zones you aren't watching.
 
 ## Later: other worlds and alien life

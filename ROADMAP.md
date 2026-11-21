@@ -99,6 +99,14 @@ StrangeLife models the main sources of Earth's biodiversity. Each entry says wha
   - `sprites.js` draws every body plan from body genes and looks: vertebrates and arthropods are laid out in their own units and fitted to the portrait, so long necks, tails and ornaments fit; bodies get outlines, pale bellies, markings and top-lit shading.
   - Life seeded from nothing gets a random look; saves and zoo creatures from before looks get one from their id.
 
+## 15. Warning colours, camouflage and mimicry
+- **Real:** most prey hide, but poisonous prey advertise: predators learn bright, bold patterns after a bad meal or two, so poison frogs, ladybirds, monarchs and wasps are conspicuous. Harmless species that live alongside them gain by looking the same (Batesian mimicry: hoverflies, scarlet king snakes), and poisonous species gain by sharing one warning (Müllerian mimicry: many unrelated Heliconius butterflies look alike).
+- **Game:**
+  - The `toxins` gene also works in animals (`ph.poison`). `colouration()` in `genome.js` turns poison, the display gene and the markings into toxicity, conspicuousness and camouflage. In `ecology()`, vulnerability to predators falls with poison (much more when conspicuous) and with camouflage, and rises for conspicuous animals that are good to eat; poisons cost a little upkeep.
+  - Poisonous lineages arise now and then from hunted prey (a dedicated origin process, like social insects, mostly with warning colours), count as a niche and a species group of their own, and a poisonous species that is drab tends to become conspicuous when it speciates.
+  - `Ecosystem.updateMimicry()` every 50 ticks: for each animal, the poisonous, conspicuous models of similar size that share its zones; protection = model's warning × how alike they look (`lookSimilarity`) × the share of zones they share. Mimics' vulnerability falls by up to half. Each animal remembers the model it would most profit from copying, and its daughter species' looks move towards it (`convergeLooks`).
+  - Firsts: warning colours and mimicry, with discovery cards. Tags and defence notes in the Life tab and the zoo.
+
 ## Also built
 - A main menu with a scenario selector, options, load and continue, a pause menu (`menu.js`), and ending a run to take up to three species to the **zoo** (`zoo.js`): enclosures you can feed and play with, and full species profiles with ancestry
 - Methane from archaea, an orange haze, and the methane crash at the Great Oxidation Event (`Planet.stepAtmosphere`)
