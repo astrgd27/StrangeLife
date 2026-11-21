@@ -1,6 +1,7 @@
 // Run the simulation without graphics:
 //   node tools/headless.mjs [seed] [ticks] [scenario] [reportEvery]
 import { World, EONS, formatYears } from '../src/world.js';
+import { earthCheck } from '../src/earthcheck.js';
 const seed = +(process.argv[2] ?? 1), ticks = +(process.argv[3] ?? 2000), scenario = process.argv[4] ?? 'barren';
 const every = +(process.argv[5] ?? 500);
 let allo = 0, co = 0, ss = 0, isl = 0;
@@ -32,3 +33,7 @@ for (let t = 1; t <= ticks; t++) {
   }
 }
 console.log(`avg ${((Date.now() - t1) / ticks).toFixed(2)} ms/tick`);
+// how the world compares with Earth's diversity patterns
+const ec = earthCheck(w);
+console.log(`like Earth: ${ec.matches}/${ec.measured}`);
+for (const c of ec.checks) console.log(`  ${c.ok === null ? '·' : c.ok ? '✓' : '✗'} ${c.title}: ${c.summary}`);

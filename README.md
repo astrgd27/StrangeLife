@@ -44,6 +44,7 @@ To publish it with GitHub Pages: in the repo settings, go to Pages, choose *Depl
 | `Space` | Pause / resume |
 | `[` `]` | Slower / faster |
 | `T` | Tree of life |
+| `E` | Is it like Earth? Compare this planet's diversity patterns with Earth's |
 | `W` | Food web of the zone you inspected (or the one under the cursor) |
 | `Z` | Go in close: watch the animals of the zone you inspected (or the one under the cursor) as individuals |
 | `H` | Help |
@@ -65,7 +66,7 @@ The panel on the right has four tabs:
 
 - **Life** lists living species grouped by kingdom. Click one to light up its range on the globe and see its portrait, body plan, genome and appearance (with how far back its markings and ornaments go in its family).
 - **Planet** shows the current eon, atmosphere gauges, and *the story of life*: a checklist of major transitions that shows the next goal and what it needs.
-- **History** charts species per kingdom, oxygen, CO₂ and temperature, plus a chronicle of events.
+- **History** charts species per kingdom, oxygen, CO₂ and temperature, plus a chronicle of events. *🌍 Is it like Earth?* (or `E`) measures five of Earth's best-known diversity patterns on your planet and charts them beside Earth's (see below).
 - **World** holds map views, climate and evolution sliders, display options, and new-world generation.
 
 ## The science in the simulation
@@ -161,6 +162,14 @@ Everything else (photosynthesis, multicellularity, animals, land plants, forests
 - **Ozone.** It forms once there's oxygen and shields land from ultraviolet light. Before that, dry land is sterile.
 - **Mass extinctions.** Asteroids and climate swings cause them, followed by adaptive radiations.
 
+### Is it like Earth?
+Nothing in the simulation is tuned to reproduce these patterns; the *Is it like Earth?* view (`earthcheck.js`, `earthview.js`) measures them in the running world and sets them beside Earth's:
+- **Diversity through time.** Animal species from the first animals to now, beside the fossil record of marine animal genera (the Cambrian explosion, the big five mass extinctions and the long rise since). The simulation's limit of 160 lineages at a time flattens its rise, so this one usually fails for now.
+- **Tropics to poles.** Species per zone by latitude. Warmth, productivity, mild seasons and more room let tropical zones hold several times the species of polar ones, as on Earth.
+- **Species and area.** Distinct species in growing neighbourhoods of zones, fitted to S = c·A^z. Earth's z is usually 0.15–0.35; worlds here come out about 0.2–0.27.
+- **Body sizes.** Most animal species should be small, with a long tail of giants. Many worlds pass, but their skew towards small species is weaker than Earth's (around half of animal species are small, against the great majority on Earth, where insects dominate).
+- **Common and rare.** A few species hold most of the living matter and most are rare, compared with a log-normal like Earth's.
+
 ### Civilization
 When intelligence evolves, its species founds a civilization that advances through six stages: Stone Age, Farming, Metal Ages, Industrial, Information Age and Spacefaring.
 - **Time:** it slows to a human pace during the human stages.
@@ -184,6 +193,8 @@ src/brain.js        tiny evolving neural-network brains, and reading behaviour f
 src/microcosm.js    one zone simulated as individual animals with brains
 src/zoneview.js     the up-close view of a zone
 src/foodweb.js      the food-web view of a zone
+src/earthcheck.js   measures Earth's diversity patterns in a world (time, latitude, area, size, commonness)
+src/earthview.js    the "Is it like Earth?" charts
 src/ecosystem.js    zones, species, niches, population ecology, dispersal, speciation, mergers
 src/world.js        planet + ecosystem, abiogenesis, eons, natural events, history, milestones
 src/science.js      the story of life: real-science notes for each transition
@@ -216,7 +227,7 @@ The arguments are the seed, the number of ticks, the scenario, and how often to 
 
 See [ROADMAP.md](ROADMAP.md) for how each biodiversity driver is modelled, and [IDEAS.md](IDEAS.md) for what's next, including the plan to go deeper than SimEarth.
 
-Next on the list: checking the planet against Earth's own diversity patterns (the fossil-record curve, the tropics-to-poles gradient, the species–area relationship, body sizes).
+Next on the list: realistic species numbers (a faster engine and more lineages), which should also let diversity keep rising through time as Earth's did.
 
 ## License
 

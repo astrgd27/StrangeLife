@@ -7,6 +7,7 @@ import { UI } from './ui.js';
 import { TreeView } from './tree.js';
 import { ZoneView } from './zoneview.js';
 import { FoodWebView } from './foodweb.js';
+import { EarthView } from './earthview.js';
 import { GRADES, GRADE_KEYS, MAXT, previewSpecies } from './ecosystem.js';
 import { drawOrganism } from './sprites.js';
 import { LOOK_GENES } from './genome.js';
@@ -38,6 +39,8 @@ let scenario = params.get('start') || 'barren';
 let world = new World(seed, { scenario });
 const renderer = new Renderer($('view'), world);
 const web = new FoodWebView();
+const earth = new EarthView();
+$('btn-earth').addEventListener('click', () => earth.open(world));
 function openWeb(cell) {
   const d = world.describeCell(cell), E = world.eco, z = E.zoneOf[cell];
   web.open(world, z, `${d.biome.replace(/ · river$/, '')}${E.zSea[z] > 0.1 && E.zLand[z] > 0.1 ? ' and coast' : ''}${E.zFw[z] > 0.01 ? ', with rivers' : ''}`);
@@ -299,6 +302,8 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '[') setSpeed(speed - 1);
   else if (zone.isOpen) { if (e.key === 'Escape') zone.close(); return; }
   else if (web.isOpen) { if (e.key === 'Escape' || e.key === 'w' || e.key === 'W') web.close(); return; }
+  else if (earth.isOpen) { if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') earth.close(); return; }
+  else if (e.key === 'e' || e.key === 'E') earth.open(world);
   else if ((e.key === 'w' || e.key === 'W') && (ui.inspectCell >= 0 || hoverCell >= 0)) openWeb(ui.inspectCell >= 0 ? ui.inspectCell : hoverCell);
   else if (e.key === 't' || e.key === 'T') tree.toggle();
   else if ((e.key === 'z' || e.key === 'Z') && (ui.inspectCell >= 0 || hoverCell >= 0)) openZone(world.eco.zoneOf[ui.inspectCell >= 0 ? ui.inspectCell : hoverCell]);
@@ -534,4 +539,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // expose for debugging in the console
-window.strangelife = { get world() { return world; }, renderer, ui, tree, zone, web, menu, zoo, newWorld };
+window.strangelife = { get world() { return world; }, renderer, ui, tree, zone, web, earth, menu, zoo, newWorld };

@@ -97,6 +97,7 @@
   </section>
 
   <section class="tab-body" data-body="history" hidden>
+    <button class="small-btn earth-btn" id="btn-earth" title="Compare this planet's diversity with Earth's (E)">🌍 Is it like Earth?</button>
     <h3>Species by kingdom</h3>
     <canvas id="chart-div" class="chart"></canvas>
     <div class="legend small" id="legend-div"></div>
@@ -221,6 +222,21 @@
   <div class="web-stage"><canvas id="web-canvas"></canvas></div>
   <footer class="tree-detail" id="web-detail"></footer>
   <div class="tree-tip" id="web-tip" hidden></div>
+</section>
+
+<section class="webview" id="earthview" hidden aria-label="Is it like Earth?">
+  <header class="tree-head">
+    <div class="tree-title">
+      <h2>Is it like Earth?</h2>
+      <p class="muted small" id="earth-sub"></p>
+    </div>
+    <div class="tree-controls">
+      <span class="ec-legend"><span><i style="background:#c27f22"></i>This planet</span><span><i style="background:#3d8fd6"></i>Earth</span></span>
+      <button class="ghost" id="earth-refresh" title="Measure again">↻ Measure again</button>
+      <button class="ghost tree-close" id="earth-close" title="Close (Esc)" aria-label="Close">×</button>
+    </div>
+  </header>
+  <div class="ec-scroll"><p class="muted small ec-intro">Five of the best-known patterns in Earth's biodiversity, measured on this planet right now and set beside Earth's. Nothing in the simulation is tuned to a target: where the patterns match, they come out of the same causes (energy, climate, area, isolation, who eats whom).</p><div class="ec-grid" id="earth-grid"></div></div>
 </section>
 
 <section class="treeview" id="treeview" hidden aria-label="Tree of life">
